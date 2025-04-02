@@ -37,22 +37,23 @@ class MainMenu:
         start_button.pack(side=tk.LEFT, padx=5)
         
         # Exit button
-        exit_button = ttk.Button(buttons_frame, text="Exit", command=self.root.destroy)
+        exit_button = ttk.Button(buttons_frame, text="Exit", command=self.exit_program)
         exit_button.pack(side=tk.RIGHT, padx=5)
-        
-    def start_game(self):
-        # Get the current working directory and format it correctly for subprocess
-        # script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        main_py_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'main.py')
 
+    def exit_program(self):
+        self.root.destroy()  # Close the Tkinter window
+        os._exit(0)  # Forcefully exit the Python process
+
+    def start_game(self):
+        main_py_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'main.py')
         
-        # Add game mode as command line argument (can be used to modify game behavior)
+        # Add game mode as command line argument
         mode = self.game_mode.get()
         
-        # Launch the Pygame window and close the tkinter window
+        # Close the menu before launching the game
         self.root.destroy()
         
-        # Use Python executable that's currently running to launch the game
+        # Use Python executable to start the game
         python_executable = sys.executable
         subprocess.Popen([python_executable, main_py_path, mode])
 

@@ -11,6 +11,9 @@ class Fruit:
         folder_path = os.path.join(BASE_DIR, "..", "assets" ,"graphics")
         self.apple = pygame.image.load(os.path.join(folder_path, "apple.png")).convert_alpha()
         
+        self.p1 = pygame.image.load(os.path.join(folder_path, "player1", "head_down.png")).convert_alpha()
+        self.p2 = pygame.image.load(os.path.join(folder_path, "player2", "head_down.png")).convert_alpha()
+
     def draw_fruit(self, screen, cell_size):
         fruit_rect = pygame.Rect(self.pos.x * cell_size, self.pos.y * cell_size, cell_size, cell_size)
         screen.blit(self.apple, fruit_rect)
