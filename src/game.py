@@ -15,7 +15,7 @@ class Game:
         self.screen = pygame.display.set_mode((CELL_NUMBER * CELL_SIZE, CELL_NUMBER * CELL_SIZE))
         self.clock = pygame.time.Clock()
         font_path = os.path.join(BASE_DIR, "..", "assets", "Font", "PoetsenOne-Regular.ttf")
-        game_music = os.path.join(BASE_DIR, "..", "assets", "Sound", "game_music.wav")
+        
         self.game_font = pygame.font.Font(font_path, 50)
         
         # Game settings
@@ -24,12 +24,6 @@ class Game:
         self.p2_name = p2_name
         self.sound_enabled = True if sound == "on" else False
         self.music_enabled = True if music == "on" else False
-
-        if self.music_enabled:
-            pygame.mixer.init()
-            pygame.mixer.music.load(game_music)
-            pygame.mixer.music.set_volume(0.5)
-            pygame.mixer.music.play(-1)
 
         
         # Game objects
@@ -225,9 +219,16 @@ class Game:
             self.screen.blit(score_surface_p2, score_rect_p2)
 
     def draw_countdown(self):
+        if self.music_enabled:
+            game_music = os.path.join(BASE_DIR, "..", "assets", "Sound", "game_music.wav")
+            pygame.mixer.init()
+            pygame.mixer.music.load(game_music)
+            pygame.mixer.music.set_volume(0.5)
+            pygame.mixer.music.play(-1)
         countdown_text = self.game_font.render(str(self.countdown), True, (255, 255, 255))
         countdown_rect = countdown_text.get_rect(center=(CELL_NUMBER * CELL_SIZE // 2, CELL_NUMBER * CELL_SIZE // 2))
         self.screen.blit(countdown_text, countdown_rect)
+
 
     def check_collision(self):
         # Check if snakes eat fruit
