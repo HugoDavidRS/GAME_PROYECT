@@ -18,8 +18,8 @@ class MainMenu:
         
         # Initialize variables
         self.game_mode = ctk.StringVar(value="single_player")
-        self.player1_name = ctk.StringVar(value="Player 1")
-        self.player2_name = ctk.StringVar(value="Player 2")
+        self.player1_name = ctk.StringVar(value="Player_1")
+        self.player2_name = ctk.StringVar(value="Player_2")
         self.sound_effects = ctk.BooleanVar(value=True)
         self.music = ctk.BooleanVar(value=True)
         
@@ -128,7 +128,7 @@ class MainMenu:
         self.p2_frame = ctk.CTkFrame(self.player_frame, fg_color="transparent")
         self.p2_frame.pack(fill="x", padx=15, pady=(5, 15))
         
-        p2_label = ctk.CTkLabel(self.p2_frame, text="Player 2:", font=ctk.CTkFont(size=14))
+        p2_label = ctk.CTkLabel(self.p2_frame, text="Player_2:", font=ctk.CTkFont(size=14))
         p2_label.pack(side="left", padx=(10, 5))
         
         p2_entry = ctk.CTkEntry(self.p2_frame, textvariable=self.player2_name, width=200)
@@ -267,6 +267,16 @@ class MainMenu:
             self.show_error("Please enter a name for Player 2")
             return
         
+        # Validation checks
+        if not p1_name or " " in p1_name:
+            self.show_error("Player 1 name cannot be empty or contain spaces.")
+            return
+            
+        if self.game_mode.get() == "two_player":
+            if not p2_name or " " in p2_name:
+                self.show_error("Player 2 name cannot be empty or contain spaces.")
+                return
+        
         # Get game parameters
         mode = self.game_mode.get()
         sound = "on" if self.sound_effects.get() else "off"
@@ -296,7 +306,7 @@ class MainMenu:
     def show_error(self, message):
         error_window = ctk.CTkToplevel(self.root)
         error_window.title("Error")
-        error_window.geometry("300x150")
+        error_window.geometry("350x150")
         error_window.resizable(False, False)
         
         error_label = ctk.CTkLabel(

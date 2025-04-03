@@ -8,20 +8,29 @@ from src.constants import CELL_SIZE, CELL_NUMBER, GRASS_COLOR, GRASS_COLOR_ALT
 from src.sprites.snake import Snake
 from src.sprites.fruit import Fruit
 from src.sprites.button import Button
+from src.sprites.mines import Mines
 
 class Game:
     def __init__(self, game_mode="two_player", p1_name="Player 1", p2_name="Player 2", sound="on", music="on"):
         self.screen = pygame.display.set_mode((CELL_NUMBER * CELL_SIZE, CELL_NUMBER * CELL_SIZE))
         self.clock = pygame.time.Clock()
         font_path = os.path.join(BASE_DIR, "..", "assets", "Font", "PoetsenOne-Regular.ttf")
+        game_music = os.path.join(BASE_DIR, "..", "assets", "Sound", "game_music.wav")
         self.game_font = pygame.font.Font(font_path, 50)
         
         # Game settings
         self.game_mode = game_mode
         self.p1_name = p1_name
         self.p2_name = p2_name
-        self.sound_enabled = sound == "on"
-        self.music_enabled = music == "on"
+        self.sound_enabled = True if sound == "on" else False
+        self.music_enabled = True if music == "on" else False
+
+        if self.music_enabled:
+            pygame.mixer.init()
+            pygame.mixer.music.load(game_music)
+            pygame.mixer.music.set_volume(0.5)
+            pygame.mixer.music.play(-1)
+
         
         # Game objects
         self.snake = Snake(start_position=(3, 10), player_number=1)
@@ -32,6 +41,11 @@ class Game:
             self.snake2 = Snake(start_position=(22, 10), player_number=2)
         
         self.fruit = Fruit()
+        
+        # Add mine object
+        self.mine = Mines()
+        # Make sure the mine doesn't spawn in restricted areas initially
+        self.validate_mine_position()
         
         # Game state
         self.game_state = 'start'
@@ -70,7 +84,41 @@ class Game:
         self.SCREEN_UPDATE = pygame.USEREVENT
         pygame.time.set_timer(self.SCREEN_UPDATE, 150)
 
+    def validate_mine_position(self):
+        # Regenerate mine position until it's valid
+        valid_position = False
+        while not valid_position:
+            # Check if mine is in restricted area (top rows, leftmost and rightmost)
+            in_restricted_area = False
+            
+            # Checking top 2 rows, leftmost and rightmost 3 columns
+            if self.mine.pos.y < 2:  # First two rows
+                if self.mine.pos.x < 3 or self.mine.pos.x >= CELL_NUMBER - 3:
+                    in_restricted_area = True
+            
+            # Check if mine is on the same position as fruit
+            on_fruit = self.mine.pos == self.fruit.pos
+            
+            # Check if mine is on snake bodies
+            on_snake = False
+            for block in self.snake.body:
+                if self.mine.pos == block:
+                    on_snake = True
+                    break
+                    
+            if self.game_mode == "two_player" and self.snake2:
+                for block in self.snake2.body:
+                    if self.mine.pos == block:
+                        on_snake = True
+                        break
+            
+            if not in_restricted_area and not on_fruit and not on_snake:
+                valid_position = True
+            else:
+                self.mine.randomize()  # Try a new position
+
     def update(self):
+
         if self.game_state == 'countdown':
             # Handle countdown timer
             current_time = pygame.time.get_ticks()
@@ -87,18 +135,21 @@ class Game:
             self.check_fail()
 
     def draw_elements(self):
+        # print(f"Mine position: {self.mine.pos}")
         self.draw_grass()
-        
         if self.game_state == 'start':
             self.start_button.draw(self.screen)
         elif self.game_state == 'countdown':
             self.draw_countdown()
         elif self.game_state == 'playing':
             self.fruit.draw_fruit(self.screen, CELL_SIZE)
+            # Draw the mine
+            self.mine.draw_mine(self.screen, CELL_SIZE)
             self.snake.draw_snake(self.screen, CELL_SIZE)
             if self.game_mode == "two_player" and self.snake2:
                 self.snake2.draw_snake(self.screen, CELL_SIZE)
         elif self.game_state == 'game_over':
+            pygame.mixer.music.stop()
             font_path = os.path.join(BASE_DIR, "..", "assets", "Font", "PoetsenOne-Regular.ttf")
             font = pygame.font.Font(font_path, 50) 
 
@@ -191,8 +242,40 @@ class Game:
             self.snake2.add_block()
             if self.sound_enabled:
                 self.snake2.play_crunch_sound()
+        
+        # Check if snakes hit mines
+        if self.mine.pos == self.snake.body[0]:
+            if self.sound_enabled:
+                self.snake.play_boom_sound()
+            if len(self.snake.body) >= 5:
+                self.snake.body.pop()
+                self.snake.body.pop()
+            elif len(self.snake.body) == 4:
+                self.snake.body.pop()
+            elif len(self.snake.body) == 3:
+                if self.game_mode == "two_player":
+                    self.game_over(2)
+                else:
+                    self.game_over(3)
+            # Reposition the mine
+            self.mine.randomize()
+            self.validate_mine_position()
             
-        # Make sure fruit doesn't spawn on snake bodies
+        if self.game_mode == "two_player" and self.snake2 and self.mine.pos == self.snake2.body[0]:
+            if self.sound_enabled:
+                self.snake.play_boom_sound()
+            if len(self.snake2.body) >= 5:  # Ensure the snake keeps at least 3 blocks (minimum length)
+                self.snake2.body.pop()
+                self.snake2.body.pop()
+            elif len(self.snake2.body) == 4:
+                self.snake2.body.pop()
+            elif len(self.snake2.body) == 3:
+                self.game_over(1)
+            # Reposition the mine
+            self.mine.randomize()
+            self.validate_mine_position()
+            
+        # Make sure fruit doesn't spawn on snake bodies or the mine
         for block in self.snake.body[1:]:
             if block == self.fruit.pos:
                 self.fruit.randomize()
@@ -201,6 +284,33 @@ class Game:
             for block in self.snake2.body[1:]:
                 if block == self.fruit.pos:
                     self.fruit.randomize()
+        
+        # Check if fruit spawned on mine
+        if self.fruit.pos == self.mine.pos:
+            self.fruit.randomize()
+        
+        # Apple spawning behind score fix
+        for y in range(2):
+            for x in range(3):
+                if self.fruit.pos == (x, y):
+                    self.fruit.randomize()
+
+            for x in range(CELL_NUMBER - 3, CELL_NUMBER):
+                if self.fruit.pos == (x, y):
+                    self.fruit.randomize()
+                    
+        # Mine spawning behind score fix and in restricted areas
+        for y in range(2):
+            for x in range(3):
+                if self.mine.pos == (x, y):
+                    self.mine.randomize()
+                    self.validate_mine_position()
+
+            for x in range(CELL_NUMBER - 3, CELL_NUMBER):
+                if self.mine.pos == (x, y):
+                    self.mine.randomize()
+                    self.validate_mine_position()
+
 
     def check_fail(self):
         snake1_dead = False
@@ -217,7 +327,6 @@ class Game:
                 print("Snake 1 hit itself")
                 snake1_dead = True
 
-        # Only check Snake 2 in two-player mode
         if self.game_mode == "two_player" and self.snake2:
             # Snake 2 hits walls
             if not 0 <= self.snake2.body[0].x < CELL_NUMBER or not 0 <= self.snake2.body[0].y < CELL_NUMBER:
@@ -233,12 +342,14 @@ class Game:
             # Snake 1 hits Snake 2
             for block in self.snake2.body:
                 if block.x == self.snake.body[0].x and block.y == self.snake.body[0].y:
+                    self.snake.play_hiss_sound()
                     print("Snake 1 hit Snake 2's body")
                     snake1_dead = True
 
             # Snake 2 hits Snake 1
             for block in self.snake.body:
                 if block.x == self.snake2.body[0].x and block.y == self.snake2.body[0].y:
+                    self.snake2.play_hiss_sound()
                     print("Snake 2 hit Snake 1's body")
                     snake2_dead = True
 
@@ -276,6 +387,8 @@ class Game:
         if self.game_mode == "two_player" and self.snake2:
             self.snake2.reset(start_position=(22, 10), player_number=2)
         self.fruit.randomize()
+        self.mine.randomize()
+        self.validate_mine_position()
         self.start_countdown()
 
     def start_countdown(self):

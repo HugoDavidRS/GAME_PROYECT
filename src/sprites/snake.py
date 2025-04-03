@@ -17,6 +17,8 @@ class Snake:
         # print(folder_path)
         # print("________________")
         self.crunch_sound = pygame.mixer.Sound(os.path.join(folder_path, "crunch.wav"))
+        self.boom_sound = pygame.mixer.Sound(os.path.join(folder_path, "boom11.wav"))
+        self.hiss_sound = pygame.mixer.Sound(os.path.join(folder_path, "snake_hiss.wav"))
 
 
     def _initialize(self, start_position, player_number):
@@ -113,6 +115,12 @@ class Snake:
         
     def play_crunch_sound(self):
         self.crunch_sound.play()
+
+    def play_boom_sound(self):
+        self.boom_sound.play()
+    
+    def play_hiss_sound(self):
+        self.hiss_sound.play()
         
     def reset(self, start_position, player_number):
         self._initialize(start_position, player_number)
