@@ -10,16 +10,27 @@ from src.sprites.fruit import Fruit
 from src.sprites.button import Button
 
 class Game:
-    def __init__(self):
+    def __init__(self, game_mode="two_player", p1_name="Player 1", p2_name="Player 2", sound="on", music="on"):
         self.screen = pygame.display.set_mode((CELL_NUMBER * CELL_SIZE, CELL_NUMBER * CELL_SIZE))
         self.clock = pygame.time.Clock()
         font_path = os.path.join(BASE_DIR, "..", "assets", "Font", "PoetsenOne-Regular.ttf")
-        # print(font_path)
         self.game_font = pygame.font.Font(font_path, 50)
+        
+        # Game settings
+        self.game_mode = game_mode
+        self.p1_name = p1_name
+        self.p2_name = p2_name
+        self.sound_enabled = sound == "on"
+        self.music_enabled = music == "on"
         
         # Game objects
         self.snake = Snake(start_position=(3, 10), player_number=1)
-        self.snake2 = Snake(start_position=(22, 10), player_number=2) 
+        
+        # Create second snake only for multiplayer mode
+        self.snake2 = None
+        if self.game_mode == "two_player":
+            self.snake2 = Snake(start_position=(22, 10), player_number=2)
+        
         self.fruit = Fruit()
         
         # Game state
@@ -31,22 +42,25 @@ class Game:
         button_y = (CELL_NUMBER * CELL_SIZE - button_height) // 2
         
         self.start_button = Button(button_x, button_y, button_width, button_height, 
-                           'Start Game', (0, 200, 0), (255, 255, 255))  # Bright green
+                           'Start Game', (0, 200, 0), (255, 255, 255))
 
         self.reset_button = Button(button_x, button_y, button_width, button_height, 
-                           'Replay!', (255, 165, 0), (0, 0, 0))  # Orange
+                           'Replay!', (255, 165, 0), (0, 0, 0))
 
-        spacing = 10  # Space between buttons
-        adjusted_height = button_height - 5  # Slightly reduce height for better fit
+        spacing = 10
+        adjusted_height = button_height - 5
 
         self.quit_button = Button(button_x, button_y + adjusted_height + spacing, 
                                     button_width, adjusted_height, 
-                                    'Quit Game', (200, 0, 0), (255, 255, 255))  # Dark red
+                                    'Quit Game', (200, 0, 0), (255, 255, 255))
 
         self.menu_button = Button(button_x, button_y + 2 * (adjusted_height + spacing), 
                                     button_width, adjusted_height, 
-                                    'Menu', (0, 150, 255), (0, 0, 0))  # Light blue
-
+                                    'Menu', (0, 150, 255), (0, 0, 0))
+        
+        text_x = button_x + button_width // 2
+        text_y = button_y - 30
+        self.game_over_txt_pos = (text_x, text_y)
         
         # Countdown
         self.countdown = 4
@@ -66,11 +80,12 @@ class Game:
                 if self.countdown <= 0:
                     self.game_state = 'playing'
         elif self.game_state == 'playing':
-            self.snake.move_snake() 
-            self.snake2.move_snake()
+            self.snake.move_snake()
+            if self.game_mode == "two_player" and self.snake2:
+                self.snake2.move_snake()
             self.check_collision()
             self.check_fail()
-            
+
     def draw_elements(self):
         self.draw_grass()
         
@@ -81,23 +96,45 @@ class Game:
         elif self.game_state == 'playing':
             self.fruit.draw_fruit(self.screen, CELL_SIZE)
             self.snake.draw_snake(self.screen, CELL_SIZE)
-            self.snake2.draw_snake(self.screen, CELL_SIZE)
+            if self.game_mode == "two_player" and self.snake2:
+                self.snake2.draw_snake(self.screen, CELL_SIZE)
         elif self.game_state == 'game_over':
+            font_path = os.path.join(BASE_DIR, "..", "assets", "Font", "PoetsenOne-Regular.ttf")
+            font = pygame.font.Font(font_path, 50) 
+
+            # Determine message based on winner
+            if self.winner == 1:
+                game_over_text = f"{self.p1_name} Wins!"
+                text_color = (0, 0, 200)  
+            elif self.winner == 2:
+                game_over_text = f"{self.p2_name} Wins!"
+                text_color = (0, 0, 200)  
+            elif self.winner == 0:
+                game_over_text = "It's a Tie!"
+                text_color = (255, 0, 0) 
+            else:
+                game_over_text = "Game Over"
+                text_color = (255, 0, 0)
+
+            game_over_surface = font.render(game_over_text, True, text_color)  
+            text_rect = game_over_surface.get_rect(center=self.game_over_txt_pos)  
+            self.screen.blit(game_over_surface, text_rect)
+
             self.reset_button.draw(self.screen)
             self.quit_button.draw(self.screen)
             self.menu_button.draw(self.screen)
         self.draw_score()
 
     def draw_score(self):
-        margin = 20  # Margin from screen edges
-        snake_size = 40  # Size of the apple icon
-        padding = 10  # Padding around the background rectangle
-        bottom_padding = 2  # Extra bottom padding
+        margin = 20  
+        snake_size = 40  
+        padding = 10  
+        bottom_padding = 2  
 
         # Player 1 (Left)
         score_text_p1 = str(len(self.snake.body) - 3)  
         score_surface_p1 = self.game_font.render(score_text_p1, True, (56, 74, 12))
-    
+
         snake_image_p1 = pygame.transform.scale(self.fruit.p1, (snake_size, snake_size))
         snake_rect_p1 = snake_image_p1.get_rect(midleft=(margin, margin + 12))
         score_rect_p1 = score_surface_p1.get_rect(midleft=(snake_rect_p1.right + 10, snake_rect_p1.centery))
@@ -108,33 +145,33 @@ class Game:
             max(snake_rect_p1.height, score_rect_p1.height) + padding + bottom_padding
         )
 
-        # Player 2 (Right)
-        score_text_p2 = str(len(self.snake2.body) - 3)  
-        score_surface_p2 = self.game_font.render(score_text_p2, True, (56, 74, 12))
-    
-        snake_image_p2 = pygame.transform.scale(self.fruit.p2, (snake_size, snake_size))
-        score_rect_p2 = score_surface_p2.get_rect(midright=(CELL_SIZE * CELL_NUMBER - margin, margin + 12))
-        snake_rect_p2 = snake_image_p2.get_rect(midright=(score_rect_p2.left - 10, score_rect_p2.centery))
-
-        bg_rect_p2 = pygame.Rect(
-            snake_rect_p2.left - padding, snake_rect_p2.top - padding,
-            snake_rect_p2.width + score_rect_p2.width + padding * 2 + 10, 
-            max(snake_rect_p2.height, score_rect_p2.height) + padding + bottom_padding
-        )
-
         # Draw Player 1's score (Left)
         pygame.draw.rect(self.screen, (167, 209, 61), bg_rect_p1, border_radius=8)
         pygame.draw.rect(self.screen, (56, 74, 12), bg_rect_p1, 2, border_radius=8)
         self.screen.blit(snake_image_p1, snake_rect_p1)
         self.screen.blit(score_surface_p1, score_rect_p1)
 
-        # Draw Player 2's score (Right)
-        pygame.draw.rect(self.screen, (167, 209, 61), bg_rect_p2, border_radius=8)
-        pygame.draw.rect(self.screen, (56, 74, 12), bg_rect_p2, 2, border_radius=8)
-        self.screen.blit(snake_image_p2, snake_rect_p2)
-        self.screen.blit(score_surface_p2, score_rect_p2)
+        # Only draw Player 2's score in two-player mode
+        if self.game_mode == "two_player" and self.snake2:
+            # Player 2 (Right)
+            score_text_p2 = str(len(self.snake2.body) - 3)  
+            score_surface_p2 = self.game_font.render(score_text_p2, True, (56, 74, 12))
+        
+            snake_image_p2 = pygame.transform.scale(self.fruit.p2, (snake_size, snake_size))
+            score_rect_p2 = score_surface_p2.get_rect(midright=(CELL_SIZE * CELL_NUMBER - margin, margin + 12))
+            snake_rect_p2 = snake_image_p2.get_rect(midright=(score_rect_p2.left - 10, score_rect_p2.centery))
 
+            bg_rect_p2 = pygame.Rect(
+                snake_rect_p2.left - padding, snake_rect_p2.top - padding,
+                snake_rect_p2.width + score_rect_p2.width + padding * 2 + 10, 
+                max(snake_rect_p2.height, score_rect_p2.height) + padding + bottom_padding
+            )
 
+            # Draw Player 2's score (Right)
+            pygame.draw.rect(self.screen, (167, 209, 61), bg_rect_p2, border_radius=8)
+            pygame.draw.rect(self.screen, (56, 74, 12), bg_rect_p2, 2, border_radius=8)
+            self.screen.blit(snake_image_p2, snake_rect_p2)
+            self.screen.blit(score_surface_p2, score_rect_p2)
 
     def draw_countdown(self):
         countdown_text = self.game_font.render(str(self.countdown), True, (255, 255, 255))
@@ -146,54 +183,98 @@ class Game:
         if self.fruit.pos == self.snake.body[0]:
             self.fruit.randomize()
             self.snake.add_block()
-            self.snake.play_crunch_sound()
+            if self.sound_enabled:
+                self.snake.play_crunch_sound()
             
-        if self.fruit.pos == self.snake2.body[0]:
+        if self.game_mode == "two_player" and self.snake2 and self.fruit.pos == self.snake2.body[0]:
             self.fruit.randomize()
             self.snake2.add_block()
-            self.snake2.play_crunch_sound()
+            if self.sound_enabled:
+                self.snake2.play_crunch_sound()
             
         # Make sure fruit doesn't spawn on snake bodies
         for block in self.snake.body[1:]:
             if block == self.fruit.pos:
                 self.fruit.randomize()
                 
-        for block in self.snake2.body[1:]:
-            if block == self.fruit.pos:
-                self.fruit.randomize()
+        if self.game_mode == "two_player" and self.snake2:
+            for block in self.snake2.body[1:]:
+                if block == self.fruit.pos:
+                    self.fruit.randomize()
 
     def check_fail(self):
-        # Check if either snake hits wall
-        if not 0 <= self.snake.body[0].x < CELL_NUMBER or not 0 <= self.snake.body[0].y < CELL_NUMBER:
-            self.game_over()
-            
-        if not 0 <= self.snake2.body[0].x < CELL_NUMBER or not 0 <= self.snake2.body[0].y < CELL_NUMBER:
-            self.game_over()
-            
-        # Check if snakes hit themselves
-        for block in self.snake.body[1:]:
-            if block == self.snake.body[0]:
-                self.game_over()
-                
-        for block in self.snake2.body[1:]:
-            if block == self.snake2.body[0]:
-                self.game_over()
-                
-        # Check if snakes hit each other
-        for block in self.snake2.body:
-            if block == self.snake.body[0]:
-                self.game_over()
-                
-        for block in self.snake.body:
-            if block == self.snake2.body[0]:
-                self.game_over()
+        snake1_dead = False
+        snake2_dead = False
 
-    def game_over(self):
+        # Snake 1 hits walls
+        if not 0 <= self.snake.body[0].x < CELL_NUMBER or not 0 <= self.snake.body[0].y < CELL_NUMBER:
+            print("Snake 1 hit the wall")
+            snake1_dead = True
+                
+        # Snake 1 hits its own body
+        for block in self.snake.body[1:]:
+            if block.x == self.snake.body[0].x and block.y == self.snake.body[0].y:
+                print("Snake 1 hit itself")
+                snake1_dead = True
+
+        # Only check Snake 2 in two-player mode
+        if self.game_mode == "two_player" and self.snake2:
+            # Snake 2 hits walls
+            if not 0 <= self.snake2.body[0].x < CELL_NUMBER or not 0 <= self.snake2.body[0].y < CELL_NUMBER:
+                print("Snake 2 hit the wall")
+                snake2_dead = True
+
+            # Snake 2 hits its own body
+            for block in self.snake2.body[1:]:
+                if block.x == self.snake2.body[0].x and block.y == self.snake2.body[0].y:
+                    print("Snake 2 hit itself")
+                    snake2_dead = True
+
+            # Snake 1 hits Snake 2
+            for block in self.snake2.body:
+                if block.x == self.snake.body[0].x and block.y == self.snake.body[0].y:
+                    print("Snake 1 hit Snake 2's body")
+                    snake1_dead = True
+
+            # Snake 2 hits Snake 1
+            for block in self.snake.body:
+                if block.x == self.snake2.body[0].x and block.y == self.snake2.body[0].y:
+                    print("Snake 2 hit Snake 1's body")
+                    snake2_dead = True
+
+        # Handle game over conditions
+        if self.game_mode == "single_player":
+            if snake1_dead:
+                self.game_over(3)  # Game over in single player
+        else:
+            # Two-player mode logic
+            if snake1_dead and snake2_dead:
+                snake1_score = len(self.snake.body) - 3
+                snake2_score = len(self.snake2.body) - 3
+
+                print(f"Scores -> Snake 1: {snake1_score}, Snake 2: {snake2_score}")
+                
+                if snake1_score > snake2_score:
+                    self.game_over(1)  # Snake 1 wins
+                elif snake1_score < snake2_score:
+                    self.game_over(2)  # Snake 2 wins
+                else:
+                    self.game_over(0)  # It's a tie
+            elif snake1_dead:
+                self.game_over(2)  # Snake 2 wins
+            elif snake2_dead:
+                self.game_over(1)  # Snake 1 wins
+
+
+
+    def game_over(self, winner):
         self.game_state = 'game_over'
+        self.winner = winner
 
     def reset_game(self):
         self.snake.reset(start_position=(3, 10), player_number=1)
-        self.snake2.reset(start_position=(22, 10), player_number=2)
+        if self.game_mode == "two_player" and self.snake2:
+            self.snake2.reset(start_position=(22, 10), player_number=2)
         self.fruit.randomize()
         self.start_countdown()
 
@@ -230,7 +311,6 @@ class Game:
                     pygame.quit()
                     run_menu()
                     
-                    
         if self.game_state == 'playing' and event.type == pygame.KEYDOWN:
             # Player 1 controls (WASD)
             if event.key == pygame.K_w:
@@ -246,16 +326,17 @@ class Game:
                 if self.snake.direction.x != 1:
                     self.snake.direction = Vector2(-1, 0)
                     
-            # Player 2 controls (Arrow keys)
-            if event.key == pygame.K_UP:
-                if self.snake2.direction.y != 1:
-                    self.snake2.direction = Vector2(0, -1)
-            if event.key == pygame.K_DOWN:
-                if self.snake2.direction.y != -1:
-                    self.snake2.direction = Vector2(0, 1)
-            if event.key == pygame.K_RIGHT:
-                if self.snake2.direction.x != -1:
-                    self.snake2.direction = Vector2(1, 0)
-            if event.key == pygame.K_LEFT:
-                if self.snake2.direction.x != 1:
-                    self.snake2.direction = Vector2(-1, 0)  
+            # Player 2 controls (Arrow keys) - only in two-player mode
+            if self.game_mode == "two_player" and self.snake2:
+                if event.key == pygame.K_UP:
+                    if self.snake2.direction.y != 1:
+                        self.snake2.direction = Vector2(0, -1)
+                if event.key == pygame.K_DOWN:
+                    if self.snake2.direction.y != -1:
+                        self.snake2.direction = Vector2(0, 1)
+                if event.key == pygame.K_RIGHT:
+                    if self.snake2.direction.x != -1:
+                        self.snake2.direction = Vector2(1, 0)
+                if event.key == pygame.K_LEFT:
+                    if self.snake2.direction.x != 1:
+                        self.snake2.direction = Vector2(-1, 0)

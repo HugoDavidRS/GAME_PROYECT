@@ -11,8 +11,27 @@ def main():
     pygame.mixer.pre_init(44100, 16, 2, 512)
     pygame.init()
     
-    # Create game instance
-    game = Game()
+    # Process command line arguments
+    game_mode = "two_player"  # Default
+    p1_name = "Player 1"
+    p2_name = "Player 2"
+    sound = "on"
+    music = "on"
+    
+    # Get arguments if provided
+    if len(sys.argv) >= 2:
+        game_mode = sys.argv[1]
+    if len(sys.argv) >= 3:
+        p1_name = sys.argv[2]
+    if len(sys.argv) >= 4:
+        p2_name = sys.argv[3]
+    if len(sys.argv) >= 5:
+        sound = sys.argv[4]
+    if len(sys.argv) >= 6:
+        music = sys.argv[5]
+    
+    # Create game instance with settings
+    game = Game(game_mode, p1_name, p2_name, sound, music)
     
     # Main game loop
     while True:

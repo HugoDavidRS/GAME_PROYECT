@@ -1,5 +1,5 @@
 # Constants for the game
-import pygame
+# import pygame
 
 # Game settings
 CELL_SIZE = 40
