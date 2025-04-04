@@ -9,6 +9,7 @@ from src.sprites.snake import Snake
 from src.sprites.fruit import Fruit
 from src.sprites.button import Button
 from src.sprites.mines import Mines
+from src.services.dbhelper import DatabaseService
 
 class Game:
     def __init__(self, game_mode="two_player", p1_name="Player 1", p2_name="Player 2", sound="on", music="on"):
@@ -17,6 +18,8 @@ class Game:
         font_path = os.path.join(BASE_DIR, "..", "assets", "Font", "PoetsenOne-Regular.ttf")
         
         self.game_font = pygame.font.Font(font_path, 50)
+        self.db_service = DatabaseService()
+
         
         # Game settings
         self.game_mode = game_mode
@@ -382,6 +385,21 @@ class Game:
     def game_over(self, winner):
         self.game_state = 'game_over'
         self.winner = winner
+        self.game_state = 'game_over'
+        self.winner = winner
+    
+        # Update scores in database
+        if self.game_mode == "single_player":
+        # In single player, update score when game ends
+            score = len(self.snake.body) - 3
+            self.db_service.update_score_singleplayer(self.p1_name, score)
+        else:
+        # In multiplayer, update both players' scores
+            score1 = len(self.snake.body) - 3
+            score2 = len(self.snake2.body) - 3
+        
+            self.db_service.update_score_multiplayer(self.p1_name, score1)
+            self.db_service.update_score_multiplayer(self.p2_name, score2)
 
     def reset_game(self):
         self.snake.reset(start_position=(3, 10), player_number=1)
