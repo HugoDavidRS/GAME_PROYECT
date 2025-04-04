@@ -124,6 +124,12 @@ class Game:
                 self.last_countdown_tick = current_time
                 if self.countdown <= 0:
                     self.game_state = 'playing'
+                    if self.music_enabled:
+                        game_music = os.path.join(BASE_DIR, "..", "assets", "Sound", "game_music.wav")
+                        pygame.mixer.init()
+                        pygame.mixer.music.load(game_music)
+                        pygame.mixer.music.set_volume(0.5)
+                        pygame.mixer.music.play(-1)
         elif self.game_state == 'playing':
             self.snake.move_snake()
             if self.game_mode == "two_player" and self.snake2:
@@ -222,12 +228,6 @@ class Game:
             self.screen.blit(score_surface_p2, score_rect_p2)
 
     def draw_countdown(self):
-        if self.music_enabled:
-            game_music = os.path.join(BASE_DIR, "..", "assets", "Sound", "game_music.wav")
-            pygame.mixer.init()
-            pygame.mixer.music.load(game_music)
-            pygame.mixer.music.set_volume(0.5)
-            pygame.mixer.music.play(-1)
         countdown_text = self.game_font.render(str(self.countdown), True, (255, 255, 255))
         countdown_rect = countdown_text.get_rect(center=(CELL_NUMBER * CELL_SIZE // 2, CELL_NUMBER * CELL_SIZE // 2))
         self.screen.blit(countdown_text, countdown_rect)
