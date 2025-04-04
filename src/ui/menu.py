@@ -4,12 +4,19 @@ import sys
 import os
 from PIL import Image, ImageTk
 from src.services.dbhelper import DatabaseService
+import pygame  # Add this import for music functionality
 
 class MainMenu:
     def __init__(self):
         # Set theme and appearance
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
+        
+        # Initialize pygame for music
+        pygame.init()
+        pygame.mixer.init()
+        self.music_playing = False
+        self.menu_music_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets", "Sound", "menu_bgm.mp3")
         
         # Create root window
         self.root = ctk.CTk()
@@ -40,6 +47,12 @@ class MainMenu:
         
         # Load leaderboard data from database
         self.load_leaderboard_data()
+        
+        # Start playing music when menu loads
+        self.start_menu_music()
+        
+        # Set up a protocol for when the window is closed
+        self.root.protocol("WM_DELETE_WINDOW", self.exit_program)
         
     def create_welcome_header(self):
         # Logo/Welcome section (you can replace with your own logo image)
@@ -167,6 +180,7 @@ class MainMenu:
             sound_frame,
             text="Background Music",
             variable=self.music,
+            command=self.toggle_music_from_switch,
             font=ctk.CTkFont(size=14)
         )
         music_switch.pack(anchor="w", padx=25, pady=(5, 15))
@@ -201,6 +215,17 @@ class MainMenu:
             width=100
         )
         exit_button.pack(side="left", padx=20)
+
+        # Mute Button
+        self.mute_button = ctk.CTkButton(
+            button_frame,
+            text="Mute Music",
+            command=self.toggle_menu_music,
+            fg_color="#A9A9A9",
+            hover_color="#2c2c2c",
+            width=100
+        )
+        self.mute_button.pack(side="left", padx=20)
         
         # Play button
         play_button = ctk.CTkButton(
@@ -257,15 +282,54 @@ class MainMenu:
             rank_label = ctk.CTkLabel(entry_frame, text=f"{i}", width=50)
             rank_label.pack(side="left", padx=5)
             
-            name_label = ctk.CTkLabel(entry_frame, text=name, width=150, anchor="w")
+            name_label = ctk.CTkLabel(entry_frame, text=name, width=150)
             name_label.pack(side="left", padx=5)
             
             score_label = ctk.CTkLabel(entry_frame, text=str(score), width=80)
             score_label.pack(side="left", padx=5)
     
     def exit_program(self):
+        # Stop music before exiting
+        pygame.mixer.music.stop()
+        pygame.mixer.quit()
+        pygame.quit()
+        
         self.root.destroy()
         os._exit(0)
+    
+    def start_menu_music(self):
+        """Start playing menu background music"""
+        try:
+            pygame.mixer.music.load(self.menu_music_path)
+            pygame.mixer.music.play(-1)  # -1 means loop indefinitely
+            self.music_playing = True
+            self.mute_button.configure(text="Mute Music")
+        except Exception as e:
+            print(f"Error playing music: {e}")
+    
+    def toggle_menu_music(self):
+        """Toggle menu music on/off"""
+        if self.music_playing:
+            pygame.mixer.music.pause()
+            self.music_playing = False
+            self.mute_button.configure(text="Unmute Music")
+        else:
+            pygame.mixer.music.unpause()
+            self.music_playing = True
+            self.mute_button.configure(text="Mute Music")
+    
+    def toggle_music_from_switch(self):
+        """Handle music toggle from the switch in sound settings"""
+        if self.music.get():  # If music should be on
+            if not self.music_playing:
+                pygame.mixer.music.unpause()
+                self.music_playing = True
+                self.mute_button.configure(text="Mute Music")
+        else:  # If music should be off
+            if self.music_playing:
+                pygame.mixer.music.pause()
+                self.music_playing = False
+                self.mute_button.configure(text="Unmute Music")
     
     def start_game(self):
         # Get player names
@@ -361,6 +425,11 @@ class MainMenu:
         p2_name = self.player2_name.get()
         sound = "on" if self.sound_effects.get() else "off"
         music = "on" if self.music.get() else "off"
+        
+        # Stop music before closing
+        pygame.mixer.music.stop()
+        pygame.mixer.quit()
+        pygame.quit()
         
         # Close the menu before launching the game
         self.root.destroy()
