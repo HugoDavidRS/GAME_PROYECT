@@ -23,7 +23,10 @@ This is a Semester 2 Python project that combines game development and GUI desig
 1. **Clone the Repository**
    ```bash
    git clone https://github.com/zaahidvohra/Slither.io-Python.git
+   cd Slither.io-Python
 2. Install Dependencies
    ```bash
    pip install pygame customtkinter
 3. Run launcher.py
+   ```bash
+   python launcher.py
