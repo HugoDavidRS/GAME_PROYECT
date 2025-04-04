@@ -1,1 +1,4 @@
 __pycache__
+src/services/snake_scores.db
+src/services/*.db
+
