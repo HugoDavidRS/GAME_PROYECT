@@ -11,6 +11,8 @@ class MainMenu:
         # Set theme and appearance
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
+
+        self.exit_reason = "PLAY"
         
         # Initialize pygame for music
         pygame.init()
@@ -299,6 +301,7 @@ class MainMenu:
         except Exception:
             pass
         
+        self.exit_reason = "QUIT"
         self.root.destroy()
         sys.exit(0)  # Use sys.exit instead of os._exit
     
@@ -432,18 +435,24 @@ class MainMenu:
         music = "on" if self.music.get() else "off"
         
         # Stop music before closing
-        pygame.mixer.music.stop()
-        pygame.mixer.quit()
-        pygame.quit()
+        try:
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+                pygame.mixer.quit()
+            if pygame.get_init():
+                pygame.quit()
+        except Exception:
+            pass
         
-        # Close the menu before launching the game
+        # Close the menu
         self.root.destroy()
         
-        # Use Python executable to start the game (modify path as needed)
+        # Start a new process for the game instead of continuing in this one
+        # This avoids issues with Tkinter and pygame mixing in the same process
         main_py_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'main.py')
         python_executable = sys.executable
         
-        # Pass all parameters to the game
+        # Launch the game in a new process and exit this one
         subprocess.Popen([
             python_executable, 
             main_py_path, 
@@ -453,6 +462,9 @@ class MainMenu:
             sound, 
             music
         ])
+        
+        # Exit this process completely
+        sys.exit(0)
     
     def show_error(self, message):
         error_window = ctk.CTkToplevel(self.root)
@@ -483,6 +495,7 @@ class MainMenu:
 def run_menu():
     app = MainMenu()
     app.root.mainloop()
+    return "QUIT"
 
 if __name__ == "__main__":
     run_menu()
