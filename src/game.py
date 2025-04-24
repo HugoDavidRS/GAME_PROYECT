@@ -440,8 +440,14 @@ class Game:
                     pygame.quit()
                     os._exit(0)
                 if self.menu_button.is_clicked(event.pos):
+                    # Cleanup game resources
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.stop()
+                        pygame.mixer.quit()
                     pygame.quit()
-                    run_menu()
+                    # Return to menu without recursion
+                    self.root = None
+                    return "MENU"
                     
         if self.game_state == 'playing' and event.type == pygame.KEYDOWN:
             # Player 1 controls (WASD)

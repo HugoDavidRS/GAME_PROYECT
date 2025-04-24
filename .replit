@@ -2,3 +2,15 @@ modules = ["python-3.12"]
 
 [nix]
 channel = "stable-24_05"
+
+[workflows]
+runButton = "Run Game"
+
+[[workflows.workflow]]
+name = "Run Game"
+author = 26076752
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python launcher.py"

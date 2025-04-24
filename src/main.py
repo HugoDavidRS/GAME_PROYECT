@@ -7,9 +7,11 @@ from src.game import Game
 from src.constants import GRASS_COLOR_ALT
 
 def main():
-    # Initialize pygame
-    pygame.mixer.pre_init(44100, 16, 2, 512)
-    pygame.init()
+    while True:
+        try:
+            # Initialize pygame for each game session
+            pygame.mixer.pre_init(44100, 16, 2, 512)
+            pygame.init()
     
     # Process command line arguments
     game_mode = "two_player"  # Default
@@ -63,6 +65,20 @@ def main():
             
         pygame.display.update()
         game.clock.tick(60)  # Limit to 60 frames per second
+        
+        # Check for menu return
+        if game.game_state == "MENU":
+            break
+    
+    # Clean up before returning to menu
+    try:
+        if pygame.mixer.get_init():
+            pygame.mixer.music.stop()
+            pygame.mixer.quit()
+        if pygame.get_init():
+            pygame.quit()
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     main()

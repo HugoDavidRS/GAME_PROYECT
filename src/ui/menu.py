@@ -289,13 +289,18 @@ class MainMenu:
             score_label.pack(side="left", padx=5)
     
     def exit_program(self):
-        # Stop music before exiting
-        pygame.mixer.music.stop()
-        pygame.mixer.quit()
-        pygame.quit()
+        try:
+            # Stop music before exiting
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+                pygame.mixer.quit()
+            if pygame.get_init():
+                pygame.quit()
+        except Exception:
+            pass
         
         self.root.destroy()
-        os._exit(0)
+        sys.exit(0)  # Use sys.exit instead of os._exit
     
     def start_menu_music(self):
         """Start playing menu background music"""
