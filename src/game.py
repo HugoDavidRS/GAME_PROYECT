@@ -400,6 +400,10 @@ class Game:
         
             self.db_service.update_score_multiplayer(self.p1_name, score1)
             self.db_service.update_score_multiplayer(self.p2_name, score2)
+            if winner == 1:
+                self.db_service.update_multiplayer_win(self.p1_name)
+            elif winner == 2:
+                self.db_service.update_multiplayer_win(self.p2_name)
 
     def reset_game(self):
         self.snake.reset(start_position=(3, 10), player_number=1)
