@@ -123,7 +123,10 @@ This project is open-source and available for educational purposes.
 
 - Game assets and sounds from various open-source resources
 - Built with Pygame and CustomTkinter
-- Developed by Your Name
+- Developed by
+  Zaahid Vohra
+  Amit Suthar
+  Taneem Mahudawala
 
 ## 🐛 Bug Reports
 
