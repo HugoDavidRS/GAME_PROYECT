@@ -109,21 +109,26 @@ class MainMenu:
             text="Single Player",
             variable=self.game_mode,
             value="single_player",
-            command=self.update_player_fields,
+            command=self.on_game_mode_changed,
             font=ctk.CTkFont(size=14)
         )
         single_radio.pack(anchor="w", padx=25, pady=5)
-        
+    
         multi_radio = ctk.CTkRadioButton(
             mode_frame,
             text="Two Player",
             variable=self.game_mode,
             value="two_player",
-            command=self.update_player_fields,
+            command=self.on_game_mode_changed,
             font=ctk.CTkFont(size=14)
         )
         multi_radio.pack(anchor="w", padx=25, pady=(5, 15))
     
+    def on_game_mode_changed(self):
+        """Handle game mode change"""
+        self.update_player_fields()
+        self.update_leaderboard_ui()
+
     def create_player_name_section(self):
         # Player name input section
         self.player_frame = ctk.CTkFrame(self.root, corner_radius=10)
@@ -263,31 +268,46 @@ class MainMenu:
             if widget != self.lb_label:  # Keep the title
                 widget.destroy()
         
+        mode = "multi" if self.game_mode.get() == "two_player" else "single"
+        self.leaderboard_data = self.db_service.fetch_leaderboard(mode)
         # Recreate header row
         header_frame = ctk.CTkFrame(self.lb_frame, fg_color="transparent")
         header_frame.pack(fill="x", padx=15, pady=(0, 5))
-        
-        rank_header = ctk.CTkLabel(header_frame, text="Rank", width=50, font=ctk.CTkFont(weight="bold"))
+    
+        rank_header = ctk.CTkLabel(header_frame, text="Rank", width=40, font=ctk.CTkFont(weight="bold"))
         rank_header.pack(side="left", padx=5)
-        
-        name_header = ctk.CTkLabel(header_frame, text="Name", width=150, font=ctk.CTkFont(weight="bold"))
+    
+        name_header = ctk.CTkLabel(header_frame, text="Name", width=120, font=ctk.CTkFont(weight="bold"))
         name_header.pack(side="left", padx=5)
-        
-        score_header = ctk.CTkLabel(header_frame, text="Score", width=80, font=ctk.CTkFont(weight="bold"))
+    
+        # Add Wins column for multiplayer mode
+        if mode == "multi":
+            wins_header = ctk.CTkLabel(header_frame, text="Wins", width=40, font=ctk.CTkFont(weight="bold"))
+            wins_header.pack(side="left", padx=5)
+    
+        score_header = ctk.CTkLabel(header_frame, text="Score", width=60, font=ctk.CTkFont(weight="bold"))
         score_header.pack(side="left", padx=5)
         
         # Fill with leaderboard data
-        for i, (name, score) in enumerate(self.leaderboard_data, 1):
+        for i, entry in enumerate(self.leaderboard_data, 1):
             entry_frame = ctk.CTkFrame(self.lb_frame, fg_color="transparent")
             entry_frame.pack(fill="x", padx=15, pady=2)
-            
-            rank_label = ctk.CTkLabel(entry_frame, text=f"{i}", width=50)
+        
+            rank_label = ctk.CTkLabel(entry_frame, text=f"{i}", width=40)
             rank_label.pack(side="left", padx=5)
-            
-            name_label = ctk.CTkLabel(entry_frame, text=name, width=150)
+        
+            name_label = ctk.CTkLabel(entry_frame, text=entry[0], width=120, anchor="w")
             name_label.pack(side="left", padx=5)
-            
-            score_label = ctk.CTkLabel(entry_frame, text=str(score), width=80)
+        
+            if mode == "multi":
+                # Format: (name, score, wins)
+                wins_label = ctk.CTkLabel(entry_frame, text=str(entry[2]), width=40)
+                wins_label.pack(side="left", padx=5)
+                score_label = ctk.CTkLabel(entry_frame, text=str(entry[1]), width=60)
+            else:
+                # Format: (name, score)
+                score_label = ctk.CTkLabel(entry_frame, text=str(entry[1]), width=60)
+        
             score_label.pack(side="left", padx=5)
     
     def exit_program(self):

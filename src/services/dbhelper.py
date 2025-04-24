@@ -1,3 +1,4 @@
+# src/database_service.py
 import sqlite3
 import os
 import sys
@@ -20,7 +21,14 @@ class DatabaseService:
     def create_tables(self):
         """Create the necessary tables if they don't exist"""
         self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS players (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, highscore_s INTEGER DEFAULT 0, highscore_m INTEGER DEFAULT 0)''')
+            CREATE TABLE IF NOT EXISTS players (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE,
+                highscore_s INTEGER DEFAULT 0,
+                highscore_m INTEGER DEFAULT 0,
+                totalwins_m INTEGER DEFAULT 0
+            )
+        ''')
         self.conn.commit()
         
     def check_username(self, username, username2=None):
@@ -49,7 +57,7 @@ class DatabaseService:
         username = username.upper()
         try:
             self.cursor.execute(
-                "INSERT INTO players (name, highscore_s, highscore_m) VALUES (?, 0, 0)",
+                "INSERT INTO players (name, highscore_s, highscore_m, totalwins_m) VALUES (?, 0, 0, 0)",
                 (username,)
             )
             self.conn.commit()
@@ -67,7 +75,7 @@ class DatabaseService:
         if not result:
             # New player, insert record
             self.cursor.execute(
-                "INSERT INTO players (name, highscore_s, highscore_m) VALUES (?, ?, 0)",
+                "INSERT INTO players (name, highscore_s, highscore_m, totalwins_m) VALUES (?, ?, 0, 0)",
                 (username, score)
             )
         elif score > result[0]:
@@ -88,7 +96,7 @@ class DatabaseService:
         if not result:
             # New player, insert record
             self.cursor.execute(
-                "INSERT INTO players (name, highscore_s, highscore_m) VALUES (?, 0, ?)",
+                "INSERT INTO players (name, highscore_s, highscore_m, totalwins_m) VALUES (?, 0, ?, 0)",
                 (username, score)
             )
         elif score > result[0]:
@@ -96,6 +104,28 @@ class DatabaseService:
             self.cursor.execute(
                 "UPDATE players SET highscore_m = ? WHERE name = ?",
                 (score, username)
+            )
+        
+        self.conn.commit()
+    
+    def update_multiplayer_win(self, username):
+        """Increment the total wins for a player in multiplayer"""
+        username = username.upper()
+        self.cursor.execute("SELECT totalwins_m FROM players WHERE name = ?", (username,))
+        result = self.cursor.fetchone()
+        
+        if not result:
+            # New player, insert record with 1 win
+            self.cursor.execute(
+                "INSERT INTO players (name, highscore_s, highscore_m, totalwins_m) VALUES (?, 0, 0, 1)",
+                (username,)
+            )
+        else:
+            # Increment wins
+            new_wins = result[0] + 1
+            self.cursor.execute(
+                "UPDATE players SET totalwins_m = ? WHERE name = ?",
+                (new_wins, username)
             )
         
         self.conn.commit()
@@ -107,23 +137,24 @@ class DatabaseService:
                 "SELECT name, highscore_s FROM players ORDER BY highscore_s DESC LIMIT 5"
             )
         else:
+            # For multiplayer, order by wins first, then by score
             self.cursor.execute(
-                "SELECT name, highscore_m FROM players ORDER BY highscore_m DESC LIMIT 5"
+                "SELECT name, highscore_m, totalwins_m FROM players ORDER BY totalwins_m DESC, highscore_m DESC LIMIT 5"
             )
             
         return self.cursor.fetchall()
         
-    def get_player_scores(self, username):
-        """Get a player's current scores"""
+    def get_player_stats(self, username):
+        """Get a player's current stats"""
         username = username.upper()
         self.cursor.execute(
-            "SELECT highscore_s, highscore_m FROM players WHERE name = ?",
+            "SELECT highscore_s, highscore_m, totalwins_m FROM players WHERE name = ?",
             (username,)
         )
         result = self.cursor.fetchone()
         if result:
-            return {"single": result[0], "multi": result[1]}
-        return {"single": 0, "multi": 0}
+            return {"single": result[0], "multi": result[1], "wins": result[2]}
+        return {"single": 0, "multi": 0, "wins": 0}
         
     def close_connection(self):
         """Close the database connection"""
