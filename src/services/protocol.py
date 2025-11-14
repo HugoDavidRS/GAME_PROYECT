@@ -10,13 +10,17 @@ class GameProtocol:
     
     # Tipos de mensajes
     MSG_ASSIGN_PLAYER = 'assign_player'
+    MSG_CONNECTED_PLAYERS = 'connected_players'
     MSG_PLAYER_JOINED = 'player_joined'
+    MSG_GAME_CAN_START = 'game_can_start'
     MSG_GAME_START = 'game_start'
     MSG_PLAYER_INPUT = 'player_input'
     MSG_GAME_STATE = 'game_state'
     MSG_GAME_STATE_UPDATE = 'game_state_update'
     MSG_GAME_OVER = 'game_over'
     MSG_PLAYER_DISCONNECTED = 'player_disconnected'
+    MSG_PLAYER_NAME = 'player_name'
+    MSG_PLAYER_NAME_UPDATE = 'player_name_update'
     MSG_ERROR = 'error'
     
     def __init__(self):
@@ -30,11 +34,26 @@ class GameProtocol:
             'timestamp': self._get_timestamp()
         }
     
+    def connected_players(self, count):
+        """Informar número de jugadores conectados"""
+        return {
+            'type': self.MSG_CONNECTED_PLAYERS,
+            'count': count,
+            'timestamp': self._get_timestamp()
+        }
+    
     def player_joined(self, player_number):
         """Notificar que un jugador se unió"""
         return {
             'type': self.MSG_PLAYER_JOINED,
             'player_number': player_number,
+            'timestamp': self._get_timestamp()
+        }
+    
+    def game_can_start(self):
+        """Notificar que el juego puede iniciar (mínimo 2 jugadores)"""
+        return {
+            'type': self.MSG_GAME_CAN_START,
             'timestamp': self._get_timestamp()
         }
     
@@ -51,6 +70,24 @@ class GameProtocol:
             'type': self.MSG_PLAYER_INPUT,
             'player_number': player_number,
             'input': input_data,
+            'timestamp': self._get_timestamp()
+        }
+    
+    def player_name(self, player_number, name):
+        """Enviar nombre de jugador"""
+        return {
+            'type': self.MSG_PLAYER_NAME,
+            'player_number': player_number,
+            'name': name,
+            'timestamp': self._get_timestamp()
+        }
+    
+    def player_name_update(self, player_number, name):
+        """Actualizar nombre de jugador"""
+        return {
+            'type': self.MSG_PLAYER_NAME_UPDATE,
+            'player_number': player_number,
+            'name': name,
             'timestamp': self._get_timestamp()
         }
     
@@ -98,7 +135,7 @@ class GameProtocol:
     def _serialize_game_state(self, game_state):
         """
         Serializar el estado del juego para transferencia de red
-        Convierte objetos complejos en estructuras simples
+        Ahora soporta hasta 5 jugadores
         """
         if not game_state:
             return None
@@ -111,13 +148,12 @@ class GameProtocol:
         serialized['countdown'] = getattr(game_state, 'countdown', 0)
         serialized['winner'] = getattr(game_state, 'winner', None)
         
-        # Serializar serpientes
+        # Serializar serpientes (hasta 5)
         serialized['snakes'] = {}
-        if hasattr(game_state, 'snake') and game_state.snake:
-            serialized['snakes'][1] = self._serialize_snake(game_state.snake)
-        
-        if hasattr(game_state, 'snake2') and game_state.snake2:
-            serialized['snakes'][2] = self._serialize_snake(game_state.snake2)
+        if hasattr(game_state, 'snakes'):
+            for player_num, snake in game_state.snakes.items():
+                if snake and 1 <= player_num <= 5:
+                    serialized['snakes'][player_num] = self._serialize_snake(snake)
         
         # Serializar fruta
         if hasattr(game_state, 'fruit') and game_state.fruit:
@@ -137,17 +173,15 @@ class GameProtocol:
         
         # Puntuaciones
         serialized['scores'] = {}
-        if hasattr(game_state, 'snake') and game_state.snake:
-            serialized['scores'][1] = len(game_state.snake.body) - 3
-        
-        if hasattr(game_state, 'snake2') and game_state.snake2:
-            serialized['scores'][2] = len(game_state.snake2.body) - 3
+        if hasattr(game_state, 'snakes'):
+            for player_num, snake in game_state.snakes.items():
+                if snake and 1 <= player_num <= 5:
+                    serialized['scores'][player_num] = len(snake.body) - 3
         
         # Información de jugadores
-        serialized['players'] = {
-            'p1_name': getattr(game_state, 'p1_name', 'Player 1'),
-            'p2_name': getattr(game_state, 'p2_name', 'Player 2')
-        }
+        serialized['players'] = {}
+        if hasattr(game_state, 'player_names'):
+            serialized['players'] = game_state.player_names
         
         return serialized
     
@@ -201,13 +235,16 @@ class GameProtocol:
             # Actualizar serpientes
             snakes_data = serialized_state.get('snakes', {})
             
-            # Serpiente 1
-            if 1 in snakes_data and hasattr(game_instance, 'snake') and game_instance.snake:
-                self._update_snake(game_instance.snake, snakes_data[1])
+            for player_num in range(1, 6):  # Jugadores 1-5
+                if player_num in snakes_data and hasattr(game_instance, 'snakes') and player_num in game_instance.snakes:
+                    self._update_snake(game_instance.snakes[player_num], snakes_data[player_num])
             
-            # Serpiente 2
-            if 2 in snakes_data and hasattr(game_instance, 'snake2') and game_instance.snake2:
-                self._update_snake(game_instance.snake2, snakes_data[2])
+            # Actualizar nombres de jugadores
+            players_data = serialized_state.get('players', {})
+            if hasattr(game_instance, 'player_names'):
+                for player_num, name in players_data.items():
+                    if 1 <= int(player_num) <= 5:
+                        game_instance.player_names[int(player_num)] = name
             
             # Actualizar fruta
             fruit_data = serialized_state.get('fruit')
@@ -294,6 +331,18 @@ class GameProtocol:
             if hasattr(game_instance, 'start_countdown'):
                 game_instance.start_countdown()
                 
+        elif msg_type == self.MSG_GAME_CAN_START:
+            # El juego puede iniciar
+            if hasattr(game_instance, 'game_can_start'):
+                game_instance.game_can_start = True
+                
+        elif msg_type == self.MSG_PLAYER_NAME_UPDATE:
+            # Actualizar nombre de jugador
+            player_num = message['player_number']
+            name = message['name']
+            if hasattr(game_instance, 'update_player_name'):
+                game_instance.update_player_name(player_num, name)
+                
         elif msg_type == self.MSG_GAME_OVER:
             # Fin del juego
             game_instance.game_state = 'game_over'
@@ -303,23 +352,21 @@ class GameProtocol:
         """Aplicar input de jugador remoto"""
         try:
             # Determinar qué serpiente controla el jugador remoto
-            if player_number == 1:
-                snake = game_instance.snake
-            else:
-                snake = game_instance.snake2
-            
-            if not snake:
-                return
+            if hasattr(game_instance, 'snakes') and player_number in game_instance.snakes:
+                snake = game_instance.snakes[player_number]
                 
-            # Aplicar dirección según input
-            if input_data == 'up' and snake.direction.y != 1:
-                snake.direction = Vector2(0, -1)
-            elif input_data == 'down' and snake.direction.y != -1:
-                snake.direction = Vector2(0, 1)
-            elif input_data == 'right' and snake.direction.x != -1:
-                snake.direction = Vector2(1, 0)
-            elif input_data == 'left' and snake.direction.x != 1:
-                snake.direction = Vector2(-1, 0)
-                
+                if not snake:
+                    return
+                    
+                # Aplicar dirección según input
+                if input_data == 'up' and snake.direction.y != 1:
+                    snake.direction = Vector2(0, -1)
+                elif input_data == 'down' and snake.direction.y != -1:
+                    snake.direction = Vector2(0, 1)
+                elif input_data == 'right' and snake.direction.x != -1:
+                    snake.direction = Vector2(1, 0)
+                elif input_data == 'left' and snake.direction.x != 1:
+                    snake.direction = Vector2(-1, 0)
+                    
         except Exception as e:
             print(f"❌ Error aplicando input remoto: {e}")

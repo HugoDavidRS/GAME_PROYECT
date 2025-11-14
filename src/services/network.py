@@ -20,11 +20,11 @@ class GameServer:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.server_socket.bind((self.host, self.port))
-            self.server_socket.listen(2)  # Máximo 2 jugadores
+            self.server_socket.listen(5)  # Cambiado de 2 a 5 jugadores máximos
             self.running = True
             
             print(f"🎮 Servidor iniciado en {self.host}:{self.port}")
-            print("Esperando jugadores...")
+            print("Esperando jugadores... (Máximo 5)")
             
             # Hilo para aceptar conexiones
             accept_thread = threading.Thread(target=self._accept_connections)
@@ -44,6 +44,12 @@ class GameServer:
                 client_socket, address = self.server_socket.accept()
                 print(f"✅ Jugador conectado desde {address}")
                 
+                # Verificar si hay espacio para más jugadores
+                if len(self.clients) >= 5:
+                    print("❌ Servidor lleno, rechazando conexión")
+                    client_socket.close()
+                    continue
+                
                 # Asignar número de jugador
                 player_number = len(self.clients) + 1
                 
@@ -58,14 +64,26 @@ class GameServer:
                 # Notificar a todos los clientes sobre el nuevo jugador
                 self.broadcast(self.protocol.player_joined(player_number))
                 
-                # Si hay 2 jugadores, iniciar juego
-                if len(self.clients) == 2:
-                    print("🎯 2 jugadores conectados - Iniciando juego...")
-                    self.broadcast(self.protocol.game_start())
+                print(f"👥 Jugadores conectados: {len(self.clients)}/5")
+                
+                # Si hay al menos 2 jugadores, permitir inicio del juego
+                if len(self.clients) >= 2:
+                    print("🎯 Mínimo 2 jugadores conectados - El host puede iniciar el juego")
+                    # Notificar al host que puede iniciar
+                    self.notify_host_game_can_start()
                     
             except Exception as e:
                 if self.running:
                     print(f"❌ Error aceptando conexión: {e}")
+    
+    def notify_host_game_can_start(self):
+        """Notificar al host que puede iniciar el juego"""
+        for client in self.clients:
+            if client.player_number == 1:  # El host es siempre el jugador 1
+                try:
+                    client.send(self.protocol.game_can_start())
+                except:
+                    pass
     
     def broadcast(self, data):
         """Enviar datos a todos los clientes"""
@@ -84,6 +102,10 @@ class GameServer:
     def handle_player_input(self, player_number, input_data):
         """Manejar input de jugador y broadcast"""
         self.broadcast(self.protocol.player_input(player_number, input_data))
+    
+    def handle_player_name(self, player_number, player_name):
+        """Manejar nombre de jugador y broadcast"""
+        self.broadcast(self.protocol.player_name_update(player_number, player_name))
     
     def stop_server(self):
         """Detener servidor"""
@@ -108,6 +130,10 @@ class ClientHandler:
         try:
             # Enviar número de jugador al cliente
             self.send(self.server.protocol.assign_player(self.player_number))
+            
+            # Enviar información de jugadores conectados
+            connected_players = len(self.server.clients)
+            self.send(self.server.protocol.connected_players(connected_players))
             
             while self.running:
                 data = self.socket.recv(4096)
@@ -134,6 +160,10 @@ class ClientHandler:
         elif msg_type == 'game_state':
             # Actualizar estado del juego en servidor
             self.server.update_game_state(message['state'])
+            
+        elif msg_type == 'player_name':
+            # Actualizar nombre del jugador
+            self.server.handle_player_name(self.player_number, message['name'])
     
     def send(self, data):
         """Enviar datos al cliente"""
@@ -153,6 +183,7 @@ class ClientHandler:
         if self in self.server.clients:
             self.server.clients.remove(self)
             print(f"👋 Jugador {self.player_number} desconectado")
+            print(f"👥 Jugadores restantes: {len(self.server.clients)}/5")
             # Notificar a otros clientes
             self.server.broadcast(self.server.protocol.player_disconnected(self.player_number))
 
@@ -166,6 +197,7 @@ class GameClient:
         self.running = False
         self.protocol = GameProtocol()
         self.message_queue = []  # Cola para almacenar mensajes recibidos
+        self.connected_players = 0
         
     def connect_to_server(self, host, port):
         """Conectar al servidor"""
@@ -222,14 +254,24 @@ class GameClient:
             self.player_number = message['player_number']
             print(f"🎮 Eres el Jugador {self.player_number}")
             
+        elif msg_type == 'connected_players':
+            self.connected_players = message['count']
+            print(f"👥 Jugadores conectados: {self.connected_players}/5")
+            
         elif msg_type == 'player_joined':
             print(f"👥 Jugador {message['player_number']} se unió")
+            
+        elif msg_type == 'game_can_start':
+            print("🎯 ¡Se puede iniciar el juego! (Mínimo 2 jugadores conectados)")
             
         elif msg_type == 'game_start':
             print("🎯 ¡Juego iniciado!")
             
         elif msg_type == 'player_disconnected':
             print(f"👋 Jugador {message['player_number']} se desconectó")
+            
+        elif msg_type == 'player_name_update':
+            print(f"📝 Jugador {message['player_number']} ahora es: {message['name']}")
             
         # Almacenar todos los mensajes en la cola para que el juego los procese
         self.message_queue.append(message)
@@ -250,6 +292,12 @@ class GameClient:
         """Enviar estado del juego al servidor (solo host)"""
         if self.connected:
             message = self.protocol.game_state(game_state)
+            self._send_message(message)
+    
+    def send_player_name(self, player_name):
+        """Enviar nombre del jugador al servidor"""
+        if self.connected:
+            message = self.protocol.player_name(self.player_number, player_name)
             self._send_message(message)
     
     def _send_message(self, message):

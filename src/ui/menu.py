@@ -24,8 +24,8 @@ class MainMenu:
         
         # Create root window
         self.root = ctk.CTk()
-        self.root.title("Slither.io Clone")
-        self.root.geometry("600x1000")
+        self.root.title("Slither.io Clone - 5 Jugadores")
+        self.root.geometry("700x1100")
         self.root.resizable(False, False)
         
         # Initialize variables
@@ -94,7 +94,7 @@ class MainMenu:
         
         subtitle_label = ctk.CTkLabel(
             title_frame,
-            text="Slither your way to the top of the leaderboard!",
+            text="¡Hasta 5 jugadores en línea! Slither your way to the top!",
             font=ctk.CTkFont(family="Arial", size=14)
         )
         subtitle_label.pack(anchor="w")
@@ -135,7 +135,7 @@ class MainMenu:
         # Multiplayer radio button
         multiplayer_radio = ctk.CTkRadioButton(
             mode_frame,
-            text="Multiplayer (Online)",
+            text="Multiplayer Online (2-5 jugadores)",
             variable=self.game_mode,
             value=MODE_MULTIPLAYER_HOST,
             command=self.on_game_mode_changed,
@@ -149,7 +149,7 @@ class MainMenu:
         
         multiplayer_label = ctk.CTkLabel(
             self.multiplayer_frame,
-            text="Multijugador en Red",
+            text="Multijugador en Red - Hasta 5 Jugadores",
             font=ctk.CTkFont(family="Arial", size=16, weight="bold")
         )
         multiplayer_label.pack(anchor="w", padx=15, pady=(15, 10))
@@ -175,8 +175,9 @@ class MainMenu:
         )
         client_radio.pack(anchor="w", padx=25, pady=5)
         
-        # Configuración de servidor (inicialmente oculto)
+        # Configuración de servidor (SIEMPRE visible, pero con contenido condicional)
         self.server_config_frame = ctk.CTkFrame(self.multiplayer_frame, fg_color="transparent")
+        self.server_config_frame.pack(fill="x", padx=15, pady=(5, 10))
         
         # IP del servidor
         ip_frame = ctk.CTkFrame(self.server_config_frame, fg_color="transparent")
@@ -185,18 +186,18 @@ class MainMenu:
         ip_label = ctk.CTkLabel(ip_frame, text="IP Servidor:", font=ctk.CTkFont(size=14))
         ip_label.pack(side="left", padx=(10, 5))
         
-        ip_entry = ctk.CTkEntry(ip_frame, textvariable=self.server_ip, width=150)
-        ip_entry.pack(side="left", padx=5)
+        self.ip_entry = ctk.CTkEntry(ip_frame, textvariable=self.server_ip, width=150)
+        self.ip_entry.pack(side="left", padx=5)
         
         # Puerto del servidor
         port_frame = ctk.CTkFrame(self.server_config_frame, fg_color="transparent")
-        port_frame.pack(fill="x", padx=15, pady=(5, 15))
+        port_frame.pack(fill="x", padx=15, pady=(5, 10))
         
         port_label = ctk.CTkLabel(port_frame, text="Puerto:", font=ctk.CTkFont(size=14))
         port_label.pack(side="left", padx=(10, 5))
         
-        port_entry = ctk.CTkEntry(port_frame, textvariable=self.server_port, width=100)
-        port_entry.pack(side="left", padx=5)
+        self.port_entry = ctk.CTkEntry(port_frame, textvariable=self.server_port, width=100)
+        self.port_entry.pack(side="left", padx=5)
         
         # Información de IP local
         info_frame = ctk.CTkFrame(self.multiplayer_frame, fg_color="transparent")
@@ -206,17 +207,35 @@ class MainMenu:
             # Obtener IP local
             hostname = socket.gethostname()
             local_ip = socket.gethostbyname(hostname)
-            ip_info = f"Tu IP local: {local_ip}"
+            self.ip_info_text = f"Tu IP local: {local_ip} (Dale esta IP a tus amigos)"
         except:
-            ip_info = "Tu IP local: No disponible"
+            self.ip_info_text = "Tu IP local: No disponible"
             
-        ip_info_label = ctk.CTkLabel(
+        self.ip_info_label = ctk.CTkLabel(
             info_frame, 
-            text=ip_info, 
+            text=self.ip_info_text, 
             font=ctk.CTkFont(size=12),
+            text_color="green"
+        )
+        self.ip_info_label.pack(anchor="w")
+        
+        # Instrucciones dinámicas
+        self.instructions_label = ctk.CTkLabel(
+            info_frame,
+            text="Selecciona 'Crear Servidor' para ser host, o 'Unirse a Servidor' para conectar",
+            font=ctk.CTkFont(size=11),
+            text_color="blue"
+        )
+        self.instructions_label.pack(anchor="w", pady=(5, 0))
+        
+        # Información sobre controles
+        controls_info = ctk.CTkLabel(
+            info_frame,
+            text="Controles: P1(WASD), P2(Flechas), P3(IJKL), P4(Numpad), P5(TFGH)",
+            font=ctk.CTkFont(size=10),
             text_color="gray"
         )
-        ip_info_label.pack(anchor="w")
+        controls_info.pack(anchor="w", pady=(2, 0))
         
         # Actualizar visibilidad inicial
         self.on_multiplayer_mode_changed()
@@ -224,9 +243,21 @@ class MainMenu:
     def on_multiplayer_mode_changed(self):
         """Manejar cambio de modo multijugador"""
         if self.multiplayer_mode.get() == "client":
-            self.server_config_frame.pack(fill="x", padx=15, pady=(5, 10))
+            # Modo Cliente - Mostrar campos y actualizar instrucciones
+            self.ip_entry.configure(state="normal")
+            self.port_entry.configure(state="normal")
+            self.instructions_label.configure(
+                text="Ingresa la IP del host y haz click en Play Game para unirte"
+            )
+            self.ip_info_label.configure(text_color="blue", text=self.ip_info_text)
         else:
-            self.server_config_frame.pack_forget()
+            # Modo Host - Campos visibles pero IP deshabilitada
+            self.ip_entry.configure(state="disabled")
+            self.port_entry.configure(state="normal")
+            self.instructions_label.configure(
+                text="Comparte tu IP local con amigos y haz click en Play Game (mínimo 2 jugadores)"
+            )
+            self.ip_info_label.configure(text_color="green", text=self.ip_info_text)
     
     def on_game_mode_changed(self):
         """Handle game mode change"""
@@ -234,7 +265,7 @@ class MainMenu:
         self.update_leaderboard_ui()
 
     def create_player_name_section(self):
-        # Player name input section
+        """Sección de nombres simplificada para multijugador"""
         self.player_frame = ctk.CTkFrame(self.root, corner_radius=10)
         self.player_frame.pack(fill="x", padx=20, pady=10)
         
@@ -249,15 +280,23 @@ class MainMenu:
         self.p1_frame = ctk.CTkFrame(self.player_frame, fg_color="transparent")
         self.p1_frame.pack(fill="x", padx=15, pady=5)
         
-        p1_label = ctk.CTkLabel(self.p1_frame, text="Player 1:", font=ctk.CTkFont(size=14))
+        p1_label = ctk.CTkLabel(self.p1_frame, text="Tu nombre:", font=ctk.CTkFont(size=14))
         p1_label.pack(side="left", padx=(10, 5))
         
         p1_entry = ctk.CTkEntry(self.p1_frame, textvariable=self.player1_name, width=200)
         p1_entry.pack(side="left", padx=5)
         
-        # Player 2 name input (will be shown/hidden based on game mode)
+        # Información sobre nombres en multijugador
+        self.name_info_label = ctk.CTkLabel(
+            self.player_frame,
+            text="En multijugador, cada jugador pone su propio nombre",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        )
+        self.name_info_label.pack(anchor="w", padx=15, pady=(5, 15))
+        
+        # Player 2 name input (solo para two_player local)
         self.p2_frame = ctk.CTkFrame(self.player_frame, fg_color="transparent")
-        self.p2_frame.pack(fill="x", padx=15, pady=(5, 15))
         
         p2_label = ctk.CTkLabel(self.p2_frame, text="Player 2:", font=ctk.CTkFont(size=14))
         p2_label.pack(side="left", padx=(10, 5))
@@ -355,12 +394,21 @@ class MainMenu:
         if self.game_mode.get() == "single_player":
             self.p2_frame.pack_forget()
             self.multiplayer_frame.pack_forget()
+            self.name_info_label.configure(
+                text="Modo un jugador - Controla la serpiente con WASD"
+            )
         elif self.game_mode.get() == "two_player":
             self.p2_frame.pack(fill="x", padx=15, pady=(5, 15))
             self.multiplayer_frame.pack_forget()
+            self.name_info_label.configure(
+                text="Modo local - P1 (WASD), P2 (Flechas)"
+            )
         else:  # Multijugador
-            self.p2_frame.pack(fill="x", padx=15, pady=(5, 15))
+            self.p2_frame.pack_forget()
             self.multiplayer_frame.pack(fill="x", padx=20, pady=10)
+            self.name_info_label.configure(
+                text="En multijugador, cada jugador pone su propio nombre"
+            )
     
     def load_leaderboard_data(self):
         """Load leaderboard data from database"""
@@ -480,18 +528,19 @@ class MainMenu:
             return
             
         # Validación según modo de juego
-        if self.game_mode.get() in ["two_player", MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT] and not p2_name:
+        if self.game_mode.get() == "two_player" and not p2_name:
             self.show_error("Please enter a name for Player 2")
             return
     
         # Validación para multijugador
         if self.game_mode.get() in [MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT]:
-            if not p2_name:
-                self.show_error("Please enter a name for Player 2")
+            # En multijugador, solo necesitamos el nombre del jugador actual
+            if not p1_name:
+                self.show_error("Please enter your name")
                 return
             
             # Validar configuración de red para cliente
-            if self.game_mode.get() == MODE_MULTIPLAYER_CLIENT:
+            if self.multiplayer_mode.get() == "client":
                 if not self.server_ip.get().strip():
                     self.show_error("Please enter server IP address")
                     return
@@ -505,10 +554,10 @@ class MainMenu:
     
         # Validation checks
         if not p1_name or " " in p1_name:
-            self.show_error("Player 1 name cannot be empty or contain spaces.")
+            self.show_error("Player name cannot be empty or contain spaces.")
             return
             
-        if self.game_mode.get() in ["two_player", MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT]:
+        if self.game_mode.get() == "two_player":
             if not p2_name or " " in p2_name:
                 self.show_error("Player 2 name cannot be empty or contain spaces.")
                 return
@@ -517,17 +566,23 @@ class MainMenu:
         existing_users = []
         if self.game_mode.get() == "single_player":
             existing_users = self.db_service.check_username(p1_name)
-        else:
+        elif self.game_mode.get() == "two_player":
             existing_users = self.db_service.check_username(p1_name, p2_name)
+        else:  # Multijugador - solo verificar el nombre del jugador actual
+            existing_users = self.db_service.check_username(p1_name)
         
         if existing_users:
             # Show confirmation dialog for returning players
             self.confirm_returning_players(existing_users)
         else:
             # Register new players
-            self.db_service.register_new_player(p1_name)
-            if self.game_mode.get() != "single_player":
+            if self.game_mode.get() == "single_player":
+                self.db_service.register_new_player(p1_name)
+            elif self.game_mode.get() == "two_player":
+                self.db_service.register_new_player(p1_name)
                 self.db_service.register_new_player(p2_name)
+            else:  # Multijugador - solo registrar el nombre del jugador actual
+                self.db_service.register_new_player(p1_name)
             self.launch_game()
     
     def confirm_returning_players(self, existing_users):
@@ -538,7 +593,10 @@ class MainMenu:
         confirm_window.geometry("400x200")
         confirm_window.resizable(False, False)
         
-        message = f"Player{'s' if len(existing_users) > 1 else ''} {', '.join(existing_users)} already exist{'s' if len(existing_users) == 1 else ''}.\n\nIf you are returning, click Continue. Otherwise, change your name."
+        if self.game_mode.get() in [MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT]:
+            message = f"Player {existing_users[0]} already exists.\n\nIf you are returning, click Continue. Otherwise, change your name."
+        else:
+            message = f"Player{'s' if len(existing_users) > 1 else ''} {', '.join(existing_users)} already exist{'s' if len(existing_users) == 1 else ''}.\n\nIf you are returning, click Continue. Otherwise, change your name."
         
         confirm_label = ctk.CTkLabel(
             confirm_window,
@@ -587,15 +645,22 @@ class MainMenu:
         
         # Determinar modo multijugador específico
         if mode in [MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT]:
-            is_host = (mode == MODE_MULTIPLAYER_HOST) or (mode == MODE_MULTIPLAYER_HOST and self.multiplayer_mode.get() == "host")
+            is_host = (self.multiplayer_mode.get() == "host")
             actual_mode = MODE_MULTIPLAYER_HOST if is_host else MODE_MULTIPLAYER_CLIENT
             host_ip = "localhost" if is_host else self.server_ip.get()
             port = int(self.server_port.get())
+            
+            # En multijugador, usar p1_name como nombre del jugador actual
+            # y p2_name como placeholder (no se usa realmente)
+            player1_name = p1_name
+            player2_name = "Player_2"  # Placeholder
         else:
             actual_mode = mode
             is_host = True
             host_ip = "localhost"
             port = 5555
+            player1_name = p1_name
+            player2_name = p2_name if mode == "two_player" else ""
         
         # Stop music before closing
         try:
@@ -619,8 +684,8 @@ class MainMenu:
             python_executable, 
             main_py_path, 
             actual_mode, 
-            p1_name, 
-            p2_name, 
+            player1_name, 
+            player2_name, 
             sound, 
             music,
             "--host", host_ip,
@@ -629,6 +694,7 @@ class MainMenu:
         ]
         
         print(f"🚀 Iniciando juego: {actual_mode}")
+        print(f"🎮 Jugador: {player1_name}")
         print(f"🔗 Configuración red: {host_ip}:{port} ({'Host' if is_host else 'Client'})")
         
         # Launch the game in a new process
