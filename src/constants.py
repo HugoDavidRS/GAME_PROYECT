@@ -1,5 +1,4 @@
 # Constants for the game
-# import pygame
 
 # Game settings
 CELL_SIZE = 40
@@ -17,3 +16,15 @@ FONT_SIZE = 25
 
 # Game speed (milliseconds between updates)
 GAME_SPEED = 150
+
+# Network settings
+DEFAULT_PORT = 5555
+MAX_PLAYERS = 2
+BUFFER_SIZE = 4096
+SERVER_TIMEOUT = 30
+
+# Game modes
+MODE_SINGLE_PLAYER = "single_player"
+MODE_TWO_PLAYER = "two_player"
+MODE_MULTIPLAYER_HOST = "multiplayer_host"
+MODE_MULTIPLAYER_CLIENT = "multiplayer_client"

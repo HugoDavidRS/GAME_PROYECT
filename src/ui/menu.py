@@ -5,6 +5,8 @@ import os
 from PIL import Image, ImageTk
 from src.services.dbhelper import DatabaseService
 import pygame  # Add this import for music functionality
+import socket
+from src.constants import MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT
 
 class MainMenu:
     def __init__(self):
@@ -23,7 +25,7 @@ class MainMenu:
         # Create root window
         self.root = ctk.CTk()
         self.root.title("Slither.io Clone")
-        self.root.geometry("600x920")
+        self.root.geometry("600x1000")
         self.root.resizable(False, False)
         
         # Initialize variables
@@ -33,12 +35,18 @@ class MainMenu:
         self.sound_effects = ctk.BooleanVar(value=True)
         self.music = ctk.BooleanVar(value=True)
         
+        # Nuevas variables para multijugador
+        self.multiplayer_mode = ctk.StringVar(value="host")  # "host" or "client"
+        self.server_ip = ctk.StringVar(value="localhost")
+        self.server_port = ctk.StringVar(value="5555")
+        
         # Initialize database service
         self.db_service = DatabaseService()
         
         # Create UI elements
         self.create_welcome_header()
         self.create_game_mode_section()
+        self.create_multiplayer_section()
         self.create_player_name_section()
         self.create_sound_controls()
         self.create_leaderboard()
@@ -116,13 +124,109 @@ class MainMenu:
     
         multi_radio = ctk.CTkRadioButton(
             mode_frame,
-            text="Two Player",
+            text="Two Player (Local)",
             variable=self.game_mode,
             value="two_player",
             command=self.on_game_mode_changed,
             font=ctk.CTkFont(size=14)
         )
-        multi_radio.pack(anchor="w", padx=25, pady=(5, 15))
+        multi_radio.pack(anchor="w", padx=25, pady=5)
+        
+        # Multiplayer radio button
+        multiplayer_radio = ctk.CTkRadioButton(
+            mode_frame,
+            text="Multiplayer (Online)",
+            variable=self.game_mode,
+            value=MODE_MULTIPLAYER_HOST,
+            command=self.on_game_mode_changed,
+            font=ctk.CTkFont(size=14)
+        )
+        multiplayer_radio.pack(anchor="w", padx=25, pady=(5, 15))
+    
+    def create_multiplayer_section(self):
+        """Crear sección de configuración multijugador"""
+        self.multiplayer_frame = ctk.CTkFrame(self.root, corner_radius=10)
+        
+        multiplayer_label = ctk.CTkLabel(
+            self.multiplayer_frame,
+            text="Multijugador en Red",
+            font=ctk.CTkFont(family="Arial", size=16, weight="bold")
+        )
+        multiplayer_label.pack(anchor="w", padx=15, pady=(15, 10))
+        
+        # Radio buttons para modo multijugador
+        host_radio = ctk.CTkRadioButton(
+            self.multiplayer_frame,
+            text="Crear Servidor (Host)",
+            variable=self.multiplayer_mode,
+            value="host",
+            command=self.on_multiplayer_mode_changed,
+            font=ctk.CTkFont(size=14)
+        )
+        host_radio.pack(anchor="w", padx=25, pady=5)
+        
+        client_radio = ctk.CTkRadioButton(
+            self.multiplayer_frame,
+            text="Unirse a Servidor",
+            variable=self.multiplayer_mode,
+            value="client",
+            command=self.on_multiplayer_mode_changed,
+            font=ctk.CTkFont(size=14)
+        )
+        client_radio.pack(anchor="w", padx=25, pady=5)
+        
+        # Configuración de servidor (inicialmente oculto)
+        self.server_config_frame = ctk.CTkFrame(self.multiplayer_frame, fg_color="transparent")
+        
+        # IP del servidor
+        ip_frame = ctk.CTkFrame(self.server_config_frame, fg_color="transparent")
+        ip_frame.pack(fill="x", padx=15, pady=5)
+        
+        ip_label = ctk.CTkLabel(ip_frame, text="IP Servidor:", font=ctk.CTkFont(size=14))
+        ip_label.pack(side="left", padx=(10, 5))
+        
+        ip_entry = ctk.CTkEntry(ip_frame, textvariable=self.server_ip, width=150)
+        ip_entry.pack(side="left", padx=5)
+        
+        # Puerto del servidor
+        port_frame = ctk.CTkFrame(self.server_config_frame, fg_color="transparent")
+        port_frame.pack(fill="x", padx=15, pady=(5, 15))
+        
+        port_label = ctk.CTkLabel(port_frame, text="Puerto:", font=ctk.CTkFont(size=14))
+        port_label.pack(side="left", padx=(10, 5))
+        
+        port_entry = ctk.CTkEntry(port_frame, textvariable=self.server_port, width=100)
+        port_entry.pack(side="left", padx=5)
+        
+        # Información de IP local
+        info_frame = ctk.CTkFrame(self.multiplayer_frame, fg_color="transparent")
+        info_frame.pack(fill="x", padx=15, pady=(0, 10))
+        
+        try:
+            # Obtener IP local
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            ip_info = f"Tu IP local: {local_ip}"
+        except:
+            ip_info = "Tu IP local: No disponible"
+            
+        ip_info_label = ctk.CTkLabel(
+            info_frame, 
+            text=ip_info, 
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        )
+        ip_info_label.pack(anchor="w")
+        
+        # Actualizar visibilidad inicial
+        self.on_multiplayer_mode_changed()
+    
+    def on_multiplayer_mode_changed(self):
+        """Manejar cambio de modo multijugador"""
+        if self.multiplayer_mode.get() == "client":
+            self.server_config_frame.pack(fill="x", padx=15, pady=(5, 10))
+        else:
+            self.server_config_frame.pack_forget()
     
     def on_game_mode_changed(self):
         """Handle game mode change"""
@@ -155,7 +259,7 @@ class MainMenu:
         self.p2_frame = ctk.CTkFrame(self.player_frame, fg_color="transparent")
         self.p2_frame.pack(fill="x", padx=15, pady=(5, 15))
         
-        p2_label = ctk.CTkLabel(self.p2_frame, text="Player_2:", font=ctk.CTkFont(size=14))
+        p2_label = ctk.CTkLabel(self.p2_frame, text="Player 2:", font=ctk.CTkFont(size=14))
         p2_label.pack(side="left", padx=(10, 5))
         
         p2_entry = ctk.CTkEntry(self.p2_frame, textvariable=self.player2_name, width=200)
@@ -247,11 +351,16 @@ class MainMenu:
         play_button.pack(side="right", padx=20)
     
     def update_player_fields(self):
-        # Show/hide player 2 input based on game mode
+        """Mostrar/ocultar campos de jugador según modo de juego"""
         if self.game_mode.get() == "single_player":
             self.p2_frame.pack_forget()
-        else:
+            self.multiplayer_frame.pack_forget()
+        elif self.game_mode.get() == "two_player":
             self.p2_frame.pack(fill="x", padx=15, pady=(5, 15))
+            self.multiplayer_frame.pack_forget()
+        else:  # Multijugador
+            self.p2_frame.pack(fill="x", padx=15, pady=(5, 15))
+            self.multiplayer_frame.pack(fill="x", padx=20, pady=10)
     
     def load_leaderboard_data(self):
         """Load leaderboard data from database"""
@@ -268,8 +377,9 @@ class MainMenu:
             if widget != self.lb_label:  # Keep the title
                 widget.destroy()
         
-        mode = "multi" if self.game_mode.get() == "two_player" else "single"
+        mode = "multi" if self.game_mode.get() in [MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT] else "single"
         self.leaderboard_data = self.db_service.fetch_leaderboard(mode)
+        
         # Recreate header row
         header_frame = ctk.CTkFrame(self.lb_frame, fg_color="transparent")
         header_frame.pack(fill="x", padx=15, pady=(0, 5))
@@ -369,20 +479,40 @@ class MainMenu:
             self.show_error("Please enter a name for Player 1")
             return
             
-        if self.game_mode.get() == "two_player" and not p2_name:
+        # Validación según modo de juego
+        if self.game_mode.get() in ["two_player", MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT] and not p2_name:
             self.show_error("Please enter a name for Player 2")
             return
-        
+    
+        # Validación para multijugador
+        if self.game_mode.get() in [MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT]:
+            if not p2_name:
+                self.show_error("Please enter a name for Player 2")
+                return
+            
+            # Validar configuración de red para cliente
+            if self.game_mode.get() == MODE_MULTIPLAYER_CLIENT:
+                if not self.server_ip.get().strip():
+                    self.show_error("Please enter server IP address")
+                    return
+                try:
+                    port = int(self.server_port.get())
+                    if port < 1 or port > 65535:
+                        raise ValueError
+                except ValueError:
+                    self.show_error("Please enter a valid port number (1-65535)")
+                    return
+    
         # Validation checks
         if not p1_name or " " in p1_name:
             self.show_error("Player 1 name cannot be empty or contain spaces.")
             return
             
-        if self.game_mode.get() == "two_player":
+        if self.game_mode.get() in ["two_player", MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT]:
             if not p2_name or " " in p2_name:
                 self.show_error("Player 2 name cannot be empty or contain spaces.")
                 return
-        
+    
         # Check if username exists
         existing_users = []
         if self.game_mode.get() == "single_player":
@@ -396,7 +526,7 @@ class MainMenu:
         else:
             # Register new players
             self.db_service.register_new_player(p1_name)
-            if self.game_mode.get() == "two_player":
+            if self.game_mode.get() != "single_player":
                 self.db_service.register_new_player(p2_name)
             self.launch_game()
     
@@ -444,6 +574,7 @@ class MainMenu:
         # Make the window modal
         confirm_window.transient(self.root)
         confirm_window.grab_set()
+        self.root.wait_window(confirm_window)
     
     def launch_game(self):
         """Launch the game process"""
@@ -453,6 +584,18 @@ class MainMenu:
         p2_name = self.player2_name.get()
         sound = "on" if self.sound_effects.get() else "off"
         music = "on" if self.music.get() else "off"
+        
+        # Determinar modo multijugador específico
+        if mode in [MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT]:
+            is_host = (mode == MODE_MULTIPLAYER_HOST) or (mode == MODE_MULTIPLAYER_HOST and self.multiplayer_mode.get() == "host")
+            actual_mode = MODE_MULTIPLAYER_HOST if is_host else MODE_MULTIPLAYER_CLIENT
+            host_ip = "localhost" if is_host else self.server_ip.get()
+            port = int(self.server_port.get())
+        else:
+            actual_mode = mode
+            is_host = True
+            host_ip = "localhost"
+            port = 5555
         
         # Stop music before closing
         try:
@@ -467,21 +610,29 @@ class MainMenu:
         # Close the menu
         self.root.destroy()
         
-        # Start a new process for the game instead of continuing in this one
-        # This avoids issues with Tkinter and pygame mixing in the same process
+        # Start a new process for the game
         main_py_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'main.py')
         python_executable = sys.executable
         
-        # Launch the game in a new process and exit this one
-        subprocess.Popen([
+        # Construir comando
+        command = [
             python_executable, 
             main_py_path, 
-            mode, 
+            actual_mode, 
             p1_name, 
-            p2_name if mode == "two_player" else "", 
+            p2_name, 
             sound, 
-            music
-        ])
+            music,
+            "--host", host_ip,
+            "--port", str(port),
+            "--is-host", "1" if is_host else "0"
+        ]
+        
+        print(f"🚀 Iniciando juego: {actual_mode}")
+        print(f"🔗 Configuración red: {host_ip}:{port} ({'Host' if is_host else 'Client'})")
+        
+        # Launch the game in a new process
+        subprocess.Popen(command)
         
         # Exit this process completely
         sys.exit(0)

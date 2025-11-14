@@ -24,12 +24,12 @@ A Python-based clone of the classic Slither.io game built with Pygame and Custom
 
 1. **Clone the Repository**
    ```bash
-   git clone https://replit.com/@username/slither-io-clone
+   git clone https://github.com/HugoDavidRS/GAME_PROYECT.git
    ```
 
 2. **Dependencies**
    The project requires:
-   - Python 3.x
+   - Python 3.x.  
    - Pygame
    - CustomTkinter
    - SQLite3 (included in Python)
@@ -124,9 +124,7 @@ This project is open-source and available for educational purposes.
 - Game assets and sounds from various open-source resources
 - Built with Pygame and CustomTkinter
 - Developed by
-  Zaahid Vohra
-  Amit Suthar
-  Taneem Mahudawala
+  Hugo David Rosas Labra
 
 ## 🐛 Bug Reports
 

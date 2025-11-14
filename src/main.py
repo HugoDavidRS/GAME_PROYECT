@@ -1,32 +1,43 @@
 import sys
 import os
+import argparse
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pygame
 from src.game import Game
-from src.constants import GRASS_COLOR_ALT
+from src.game_multiplayer import MultiplayerGame
+from src.constants import GRASS_COLOR_ALT, MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT
 
-def run_game(game_mode="two_player", p1_name="Player 1", p2_name="Player 2", sound="on", music="on"):
+def run_game(game_mode="two_player", p1_name="Player 1", p2_name="Player 2", 
+             sound="on", music="on", host=None, port=5555, is_host=True):
     """Run a single game session and return when complete"""
     # Initialize pygame
     pygame.mixer.pre_init(44100, 16, 2, 512)
     pygame.init()
     pygame.display.init()
     
-    # Create game instance with settings
-    game = Game(game_mode, p1_name, p2_name, sound, music)
+    # Create appropriate game instance
+    if game_mode in [MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT]:
+        print(f"🎮 Iniciando juego multijugador: {'HOST' if is_host else 'CLIENTE'}")
+        print(f"🔗 Conectando a: {host}:{port}")
+        game = MultiplayerGame(game_mode, p1_name, p2_name, sound, music, host, port, is_host)
+    else:
+        print(f"🎮 Iniciando juego local: {game_mode}")
+        game = Game(game_mode, p1_name, p2_name, sound, music)
     
     # Game loop
     while True:
         # Event handling
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                # Clean up pygame before returning
+                # Clean up before returning
+                if hasattr(game, 'cleanup'):
+                    game.cleanup()
                 if pygame.mixer.get_init():
                     pygame.mixer.music.stop()
                     pygame.mixer.quit()
                 pygame.quit()
-                return "QUIT"  # Signal to exit the application
+                return "QUIT"
                 
             if event.type == game.SCREEN_UPDATE:
                 if game.game_state == 'playing':
@@ -34,9 +45,13 @@ def run_game(game_mode="two_player", p1_name="Player 1", p2_name="Player 2", sou
                     
             # Handle other inputs
             game.handle_input(event)
+            
+        # Handle network messages for multiplayer (outside event loop for better performance)
+        if hasattr(game, 'handle_network_messages'):
+            game.handle_network_messages()
                 
-        # Update during countdown
-        if game.game_state in ['countdown']:
+        # Update during countdown and connecting states
+        if game.game_state in ['countdown', 'connecting']:
             game.update()
             
         # Drawing
@@ -44,7 +59,8 @@ def run_game(game_mode="two_player", p1_name="Player 1", p2_name="Player 2", sou
         
         if game.game_state == 'countdown':
             game.draw_grass()
-            game.draw_countdown()
+            if hasattr(game, 'draw_countdown'):
+                game.draw_countdown()
         else:
             game.draw_elements()
             
@@ -52,25 +68,54 @@ def run_game(game_mode="two_player", p1_name="Player 1", p2_name="Player 2", sou
         game.clock.tick(60)  # Limit to 60 frames per second
         
         # Check for menu return
-        if game.game_state == "MENU":
-            # Clean up pygame before returning
+        if getattr(game, 'game_state', None) == "MENU":
+            # Clean up before returning
+            if hasattr(game, 'cleanup'):
+                game.cleanup()
             if pygame.mixer.get_init():
                 pygame.mixer.music.stop()
                 pygame.mixer.quit()
             pygame.quit()
-            return "MENU"  # Signal to go back to menu
+            return "MENU"
+
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Snake Game')
+    parser.add_argument('game_mode', nargs='?', default="single_player")
+    parser.add_argument('p1_name', nargs='?', default="Player 1")
+    parser.add_argument('p2_name', nargs='?', default="Player 2")
+    parser.add_argument('sound', nargs='?', default="on")
+    parser.add_argument('music', nargs='?', default="on")
+    
+    # Multiplayer arguments
+    parser.add_argument('--host', help='Server host address')
+    parser.add_argument('--port', type=int, default=5555, help='Server port')
+    parser.add_argument('--is-host', type=int, default=1, help='Is host (1) or client (0)')
+    
+    return parser.parse_args()
 
 def main():
+    # Parse command line arguments
+    args = parse_arguments()
+    
     # If parameters were provided when launching the script
     if len(sys.argv) >= 2:
-        game_mode = sys.argv[1]
-        p1_name = sys.argv[2] if len(sys.argv) >= 3 else "Player 1"
-        p2_name = sys.argv[3] if len(sys.argv) >= 4 else "Player 2"
-        sound = sys.argv[4] if len(sys.argv) >= 5 else "on"
-        music = sys.argv[5] if len(sys.argv) >= 6 else "on"
+        # Extract multiplayer parameters
+        host = args.host
+        port = args.port
+        is_host = bool(args.is_host)
         
-        # Run game directly with provided parameters
-        result = run_game(game_mode, p1_name, p2_name, sound, music)
+        # Run game with provided parameters
+        result = run_game(
+            game_mode=args.game_mode,
+            p1_name=args.p1_name,
+            p2_name=args.p2_name,
+            sound=args.sound,
+            music=args.music,
+            host=host,
+            port=port,
+            is_host=is_host
+        )
         
         # After game ends, check result
         if result == "MENU":
@@ -80,7 +125,6 @@ def main():
             
             if menu_result == "QUIT":
                 sys.exit(0)
-            # If not QUIT, the script will exit and menu.py will handle launching a new game
     else:
         # No parameters provided, start with menu
         from src.ui.menu import run_menu
