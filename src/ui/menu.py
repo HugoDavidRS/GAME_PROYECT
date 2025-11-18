@@ -2,955 +2,737 @@ import customtkinter as ctk
 import subprocess
 import sys
 import os
-import socket
-from datetime import datetime
-from PIL import Image, ImageTk, ImageDraw, ImageFont
-import pygame
+from PIL import Image, ImageTk
 from src.services.dbhelper import DatabaseService
+import pygame  # Add this import for music functionality
+import socket
 from src.constants import MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT
 
 class MainMenu:
     def __init__(self):
-        # =============================================================================
-        # CONFIGURACIÓN INICIAL PREMIUM
-        # =============================================================================
-        self._setup_appearance()
-        self._initialize_variables()
-        self._setup_window()
-        self._initialize_services()
-        self._create_main_interface()
-        self._finalize_setup()
+        # Set theme and appearance
+        ctk.set_appearance_mode("light")
+        ctk.set_default_color_theme("blue")
 
-    def _setup_appearance(self):
-        """Configurar apariencia profesional de la aplicación"""
-        ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("dark-blue")
-        
-        # Paleta de colores profesional
-        self.COLORS = {
-            'primary': '#2E8B57',
-            'primary_dark': '#1F6B4D',
-            'primary_light': '#3CA374',
-            'secondary': '#3498DB',
-            'accent': '#E74C3C',
-            'success': '#27AE60',
-            'warning': '#F39C12',
-            'danger': '#E74C3C',
-            'dark_bg': '#1A1A2E',
-            'dark_card': '#16213E',
-            'dark_text': '#ECF0F1',
-            'light_bg': '#F8F9FA',
-            'light_card': '#FFFFFF',
-            'light_text': '#2C3E50'
-        }
-
-    def _initialize_variables(self):
-        """Inicializar todas las variables del sistema"""
-        # Variables de estado
         self.exit_reason = "PLAY"
-        self.music_playing = False
-        self.current_theme = "dark"
-        self.connection_status = "disconnected"
-        self.server_status = "inactive"
         
-        # Variables de juego
+        # Initialize pygame for music
+        pygame.init()
+        pygame.mixer.init()
+        self.music_playing = False
+        self.menu_music_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets", "Sound", "menu_bgm.mp3")
+        
+        # Create root window
+        self.root = ctk.CTk()
+        self.root.title("Slither.io Clone - 5 Jugadores")
+        self.root.geometry("700x1100")
+        self.root.resizable(False, False)
+        
+        # Initialize variables
         self.game_mode = ctk.StringVar(value="single_player")
-        self.player1_name = ctk.StringVar(value="SnakeMaster")
-        self.player2_name = ctk.StringVar(value="Player2")
+        self.player1_name = ctk.StringVar(value="Player_1")
+        self.player2_name = ctk.StringVar(value="Player_2")
         self.sound_effects = ctk.BooleanVar(value=True)
         self.music = ctk.BooleanVar(value=True)
-        self.game_difficulty = ctk.StringVar(value="medium")
         
-        # Variables de red
-        self.multiplayer_mode = ctk.StringVar(value="host")
+        # Nuevas variables para multijugador
+        self.multiplayer_mode = ctk.StringVar(value="host")  # "host" or "client"
         self.server_ip = ctk.StringVar(value="localhost")
         self.server_port = ctk.StringVar(value="5555")
-        self.auto_discover = ctk.BooleanVar(value=False)
         
-        # Estadísticas
-        self.total_games_played = 0
-        self.best_score = 0
-        self.player_level = 1
-
-    def _setup_window(self):
-        """Configurar ventana principal con diseño premium"""
-        self.root = ctk.CTk()
-        self.root.title("🐍 Snake Arena Pro - Ultimate Multiplayer Experience")
-        self.root.geometry("900x1000")
-        self.root.resizable(True, True)
-        self.root.minsize(850, 950)
-        
-        # Configurar protocolo de cierre
-        self.root.protocol("WM_DELETE_WINDOW", self._graceful_exit)
-
-    def _initialize_services(self):
-        """Inicializar servicios externos"""
-        # Servicio de base de datos
+        # Initialize database service
         self.db_service = DatabaseService()
         
-        # Sistema de audio
-        self._initialize_audio_system()
+        # Create UI elements
+        self.create_welcome_header()
+        self.create_game_mode_section()
+        self.create_multiplayer_section()
+        self.create_player_name_section()
+        self.create_sound_controls()
+        self.create_leaderboard()
+        self.create_buttons()
         
-        # Sistema de red
-        self._initialize_network_system()
-
-    def _initialize_audio_system(self):
-        """Inicializar sistema de audio profesional"""
+        # Update player name fields based on initial game mode
+        self.update_player_fields()
+        
+        # Load leaderboard data from database
+        self.load_leaderboard_data()
+        
+        # Start playing music when menu loads
+        self.start_menu_music()
+        
+        # Set up a protocol for when the window is closed
+        self.root.protocol("WM_DELETE_WINDOW", self.exit_program)
+        
+    def create_welcome_header(self):
+        # Logo/Welcome section (you can replace with your own logo image)
+        self.header_frame = ctk.CTkFrame(self.root, corner_radius=10)
+        self.header_frame.pack(fill="x", padx=20, pady=(20, 10))
+        
+        # Try to load a logo image (you would need to create this file)
         try:
-            pygame.init()
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
-            self.menu_music_path = self._get_music_path()
-            self.sound_effects_enabled = True
-        except Exception as e:
-            print(f"Audio system warning: {e}")
-            self.sound_effects_enabled = False
-
-    def _get_music_path(self):
-        """Obtener ruta de la música del menú"""
-        possible_paths = [
-            os.path.join(os.path.dirname(__file__), "..", "..", "assets", "Sound", "menu_bgm.mp3"),
-            os.path.join(os.path.dirname(__file__), "..", "..", "assets", "Sound", "menu_bgm.wav"),
-            "menu_music.mp3"
-        ]
-        for path in possible_paths:
-            if os.path.exists(path):
-                return path
-        return None
-
-    def _initialize_network_system(self):
-        """Inicializar sistema de detección de red"""
-        self.local_ip = self._get_local_ip()
-        self.network_status = "unknown"
-        self.available_servers = []
-
-    def _get_local_ip(self):
-        """Obtener IP local del sistema"""
-        try:
-            hostname = socket.gethostname()
-            return socket.gethostbyname(hostname)
+            logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snake_logo.png")
+            logo_img = Image.open(logo_path)
+            logo_img = logo_img.resize((80, 80))
+            self.logo = ImageTk.PhotoImage(logo_img)
+            self.logo_label = ctk.CTkLabel(self.header_frame, image=self.logo, text="")
+            self.logo_label.pack(side="left", padx=15, pady=15)
         except:
-            return "127.0.0.1"
-
-    def _create_main_interface(self):
-        """Crear interfaz principal completa"""
-        self._create_background()
-        self._create_main_container()
-        self._create_navigation_bar()
-        self._create_content_area()
-        self._create_status_bar()
-
-    def _create_background(self):
-        """Crear fondo profesional con gradiente"""
-        try:
-            self.background_image = self._create_gradient_background()
-        except Exception as e:
-            print(f"Background creation warning: {e}")
-
-    def _create_gradient_background(self):
-        """Crear fondo con gradiente profesional"""
-        width, height = 900, 1000
-        image = Image.new('RGB', (width, height), color=self.COLORS['dark_bg'])
-        draw = ImageDraw.Draw(image)
+            # If logo can't be loaded, use text instead
+            pass
         
-        # Gradiente complejo
-        for y in range(height):
-            progress = y / height
-            r = int(26 + progress * 20)
-            g = int(26 + progress * 40)
-            b = int(46 + progress * 30)
-            draw.line([(0, y), (width, y)], fill=(r, g, b))
+        # Welcome message
+        title_frame = ctk.CTkFrame(self.header_frame, fg_color="transparent")
+        title_frame.pack(side="left", padx=10, pady=15, fill="both", expand=True)
         
-        return ImageTk.PhotoImage(image)
-
-    def _create_main_container(self):
-        """Crear contenedor principal"""
-        self.main_container = ctk.CTkFrame(
-            self.root, 
-            fg_color=self.COLORS['dark_bg'],
-            corner_radius=0
+        welcome_label = ctk.CTkLabel(
+            title_frame, 
+            text="Welcome to Slither.io Clone!", 
+            font=ctk.CTkFont(family="Arial", size=24, weight="bold")
         )
-        self.main_container.pack(fill="both", expand=True, padx=0, pady=0)
-
-    def _create_navigation_bar(self):
-        """Crear barra de navegación superior"""
-        self.nav_bar = ctk.CTkFrame(
-            self.main_container,
-            fg_color=self.COLORS['dark_card'],
-            height=60,
-            corner_radius=0
+        welcome_label.pack(anchor="w", pady=(0, 5))
+        
+        subtitle_label = ctk.CTkLabel(
+            title_frame,
+            text="¡Hasta 5 jugadores en línea! Slither your way to the top!",
+            font=ctk.CTkFont(family="Arial", size=14)
         )
-        self.nav_bar.pack(fill="x", padx=0, pady=0)
-        self.nav_bar.pack_propagate(False)
+        subtitle_label.pack(anchor="w")
+    
+    def create_game_mode_section(self):
+        # Game mode selection
+        mode_frame = ctk.CTkFrame(self.root, corner_radius=10)
+        mode_frame.pack(fill="x", padx=20, pady=10)
         
-        self._create_nav_content()
-
-    def _create_nav_content(self):
-        """Crear contenido de la barra de navegación"""
-        # Logo y título
-        logo_frame = ctk.CTkFrame(self.nav_bar, fg_color="transparent")
-        logo_frame.pack(side="left", padx=20, pady=10)
-        
-        title_label = ctk.CTkLabel(
-            logo_frame,
-            text="🐍 SNAKE ARENA PRO",
-            font=ctk.CTkFont(family="Arial", size=24, weight="bold"),
-            text_color=self.COLORS['primary_light']
+        mode_label = ctk.CTkLabel(
+            mode_frame,
+            text="Select Game Mode",
+            font=ctk.CTkFont(family="Arial", size=16, weight="bold")
         )
-        title_label.pack(side="left")
+        mode_label.pack(anchor="w", padx=15, pady=(15, 10))
         
-        # Navegación
-        nav_buttons_frame = ctk.CTkFrame(self.nav_bar, fg_color="transparent")
-        nav_buttons_frame.pack(side="right", padx=20, pady=10)
-        
-        nav_buttons = [
-            ("🎮 Play", self._show_play_section),
-            ("📊 Stats", self._show_stats_section),
-            ("⚙️ Settings", self._show_settings_section),
-            ("❓ Help", self._show_help_section)
-        ]
-        
-        for text, command in nav_buttons:
-            btn = ctk.CTkButton(
-                nav_buttons_frame,
-                text=text,
-                command=command,
-                fg_color="transparent",
-                hover_color=self.COLORS['primary_dark'],
-                font=ctk.CTkFont(size=12, weight="bold"),
-                width=80
-            )
-            btn.pack(side="left", padx=5)
-
-    def _create_content_area(self):
-        """Crear área de contenido principal"""
-        self.content_area = ctk.CTkFrame(
-            self.main_container,
-            fg_color="transparent"
-        )
-        self.content_area.pack(fill="both", expand=True, padx=20, pady=20)
-        
-        # Inicializar con sección de juego
-        self._create_play_section()
-
-    def _create_play_section(self):
-        """Crear sección principal de juego"""
-        self.play_section = ctk.CTkFrame(
-            self.content_area,
-            fg_color=self.COLORS['dark_card'],
-            corner_radius=15
-        )
-        self.play_section.pack(fill="both", expand=True, padx=0, pady=0)
-        
-        self._create_game_mode_section()
-        self._create_player_section()
-        self._create_multiplayer_section()
-        self._create_quick_settings()
-        self._create_action_buttons()
-
-    def _create_game_mode_section(self):
-        """Crear sección de selección de modo de juego"""
-        mode_section = ctk.CTkFrame(
-            self.play_section,
-            fg_color="transparent"
-        )
-        mode_section.pack(fill="x", padx=25, pady=(25, 15))
-        
-        # Título de sección
-        section_title = ctk.CTkLabel(
-            mode_section,
-            text="🎯 SELECT GAME MODE",
-            font=ctk.CTkFont(family="Arial", size=20, weight="bold"),
-            text_color=self.COLORS['primary_light']
-        )
-        section_title.pack(anchor="w", pady=(0, 15))
-        
-        # Opciones de modo de juego
-        mode_options_frame = ctk.CTkFrame(mode_section, fg_color="transparent")
-        mode_options_frame.pack(fill="x", padx=10)
-        
-        modes = [
-            {
-                "icon": "👑",
-                "title": "SOLO CHALLENGE", 
-                "description": "Test your skills against AI opponents",
-                "value": "single_player",
-                "color": self.COLORS['secondary']
-            },
-            {
-                "icon": "👥", 
-                "title": "LOCAL DUEL",
-                "description": "2 players on the same device",
-                "value": "two_player", 
-                "color": self.COLORS['warning']
-            },
-            {
-                "icon": "🌐",
-                "title": "ONLINE BATTLE", 
-                "description": "2-5 players online multiplayer",
-                "value": MODE_MULTIPLAYER_HOST,
-                "color": self.COLORS['success']
-            }
-        ]
-        
-        for mode in modes:
-            self._create_mode_card(mode_options_frame, mode)
-
-    def _create_mode_card(self, parent, mode_data):
-        """Crear tarjeta de modo de juego"""
-        card = ctk.CTkFrame(
-            parent,
-            fg_color="transparent",
-            border_width=2,
-            border_color=mode_data["color"],
-            corner_radius=12
-        )
-        card.pack(fill="x", pady=8)
-        
-        card_content = ctk.CTkFrame(card, fg_color="transparent")
-        card_content.pack(fill="x", padx=15, pady=12)
-        
-        # Header de la tarjeta
-        header_frame = ctk.CTkFrame(card_content, fg_color="transparent")
-        header_frame.pack(fill="x")
-        
-        # Radio button y contenido
-        radio_btn = ctk.CTkRadioButton(
-            header_frame,
-            text="",
+        # Radio buttons for game mode
+        single_radio = ctk.CTkRadioButton(
+            mode_frame,
+            text="Single Player",
             variable=self.game_mode,
-            value=mode_data["value"],
-            command=self._on_game_mode_changed,
-            fg_color=mode_data["color"],
-            hover_color=mode_data["color"],
-            width=20,
-            height=20
+            value="single_player",
+            command=self.on_game_mode_changed,
+            font=ctk.CTkFont(size=14)
         )
-        radio_btn.pack(side="left")
-        
-        # Contenido de la tarjeta
-        content_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
-        content_frame.pack(side="left", fill="x", expand=True, padx=(10, 0))
-        
-        # Título y icono
-        title_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
-        title_frame.pack(fill="x")
-        
-        icon_label = ctk.CTkLabel(
-            title_frame,
-            text=mode_data["icon"],
-            font=ctk.CTkFont(size=18)
+        single_radio.pack(anchor="w", padx=25, pady=5)
+    
+        multi_radio = ctk.CTkRadioButton(
+            mode_frame,
+            text="Two Player (Local)",
+            variable=self.game_mode,
+            value="two_player",
+            command=self.on_game_mode_changed,
+            font=ctk.CTkFont(size=14)
         )
-        icon_label.pack(side="left")
+        multi_radio.pack(anchor="w", padx=25, pady=5)
         
-        title_label = ctk.CTkLabel(
-            title_frame,
-            text=mode_data["title"],
-            font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=self.COLORS['dark_text']
+        # Multiplayer radio button
+        multiplayer_radio = ctk.CTkRadioButton(
+            mode_frame,
+            text="Multiplayer Online (2-5 jugadores)",
+            variable=self.game_mode,
+            value=MODE_MULTIPLAYER_HOST,
+            command=self.on_game_mode_changed,
+            font=ctk.CTkFont(size=14)
         )
-        title_label.pack(side="left", padx=(8, 0))
-        
-        # Descripción
-        desc_label = ctk.CTkLabel(
-            content_frame,
-            text=mode_data["description"],
-            font=ctk.CTkFont(size=12),
-            text_color="gray70"
-        )
-        desc_label.pack(anchor="w", pady=(5, 0))
-
-    def _create_player_section(self):
-        """Crear sección de información del jugador"""
-        self.player_section = ctk.CTkFrame(
-            self.play_section,
-            fg_color="transparent"
-        )
-        self.player_section.pack(fill="x", padx=25, pady=15)
-        
-        # Título de sección
-        section_title = ctk.CTkLabel(
-            self.player_section,
-            text="👤 PLAYER PROFILE",
-            font=ctk.CTkFont(family="Arial", size=18, weight="bold"),
-            text_color=self.COLORS['primary_light']
-        )
-        section_title.pack(anchor="w", pady=(0, 12))
-        
-        # Contenido del perfil
-        profile_content = ctk.CTkFrame(self.player_section, fg_color="transparent")
-        profile_content.pack(fill="x", padx=10)
-        
-        # Campo de nombre principal
-        name_frame = ctk.CTkFrame(profile_content, fg_color="transparent")
-        name_frame.pack(fill="x", pady=8)
-        
-        name_label = ctk.CTkLabel(
-            name_frame,
-            text="Player Name:",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            width=120
-        )
-        name_label.pack(side="left")
-        
-        name_entry = ctk.CTkEntry(
-            name_frame,
-            textvariable=self.player1_name,
-            placeholder_text="Enter your legendary snake name...",
-            font=ctk.CTkFont(size=13),
-            width=250,
-            height=35
-        )
-        name_entry.pack(side="left", padx=(10, 0))
-        
-        # Información contextual
-        self.name_info_label = ctk.CTkLabel(
-            profile_content,
-            text="This name will be displayed to other players in online matches",
-            font=ctk.CTkFont(size=11),
-            text_color="gray70"
-        )
-        self.name_info_label.pack(anchor="w", padx=(120, 0), pady=(5, 0))
-
-    def _create_multiplayer_section(self):
+        multiplayer_radio.pack(anchor="w", padx=25, pady=(5, 15))
+    
+    def create_multiplayer_section(self):
         """Crear sección de configuración multijugador"""
-        self.multiplayer_section = ctk.CTkFrame(
-            self.play_section,
-            fg_color="transparent"
+        self.multiplayer_frame = ctk.CTkFrame(self.root, corner_radius=10)
+        
+        multiplayer_label = ctk.CTkLabel(
+            self.multiplayer_frame,
+            text="Multijugador en Red - Hasta 5 Jugadores",
+            font=ctk.CTkFont(family="Arial", size=16, weight="bold")
         )
+        multiplayer_label.pack(anchor="w", padx=15, pady=(15, 10))
         
-        # Título de sección
-        section_title = ctk.CTkLabel(
-            self.multiplayer_section,
-            text="🌐 MULTIPLAYER SETTINGS",
-            font=ctk.CTkFont(family="Arial", size=18, weight="bold"),
-            text_color=self.COLORS['primary_light']
-        )
-        section_title.pack(anchor="w", padx=25, pady=(0, 15))
-        
-        # Contenido multijugador
-        multiplayer_content = ctk.CTkFrame(
-            self.multiplayer_section,
-            fg_color=self.COLORS['dark_bg'],
-            corner_radius=12
-        )
-        multiplayer_content.pack(fill="x", padx=25, pady=(0, 15))
-        
-        self._create_connection_options(multiplayer_content)
-        self._create_server_config(multiplayer_content)
-        self._create_network_info(multiplayer_content)
-
-    def _create_connection_options(self, parent):
-        """Crear opciones de conexión"""
-        connection_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        connection_frame.pack(fill="x", padx=20, pady=20)
-        
-        connection_label = ctk.CTkLabel(
-            connection_frame,
-            text="Connection Type:",
-            font=ctk.CTkFont(size=14, weight="bold")
-        )
-        connection_label.pack(anchor="w", pady=(0, 10))
-        
-        # Opciones de conexión
-        options_frame = ctk.CTkFrame(connection_frame, fg_color="transparent")
-        options_frame.pack(fill="x", padx=10)
-        
-        host_option = ctk.CTkRadioButton(
-            options_frame,
-            text="🎪 HOST GAME - Create server for others to join",
+        # Radio buttons para modo multijugador
+        host_radio = ctk.CTkRadioButton(
+            self.multiplayer_frame,
+            text="Crear Servidor (Host)",
             variable=self.multiplayer_mode,
             value="host",
-            command=self._on_multiplayer_mode_changed,
-            font=ctk.CTkFont(size=13)
+            command=self.on_multiplayer_mode_changed,
+            font=ctk.CTkFont(size=14)
         )
-        host_option.pack(anchor="w", pady=8)
+        host_radio.pack(anchor="w", padx=25, pady=5)
         
-        client_option = ctk.CTkRadioButton(
-            options_frame,
-            text="🔗 JOIN GAME - Connect to existing server", 
+        client_radio = ctk.CTkRadioButton(
+            self.multiplayer_frame,
+            text="Unirse a Servidor",
             variable=self.multiplayer_mode,
             value="client",
-            command=self._on_multiplayer_mode_changed,
-            font=ctk.CTkFont(size=13)
+            command=self.on_multiplayer_mode_changed,
+            font=ctk.CTkFont(size=14)
         )
-        client_option.pack(anchor="w", pady=8)
-
-    def _create_server_config(self, parent):
-        """Crear configuración del servidor"""
-        self.server_config_section = ctk.CTkFrame(parent, fg_color="transparent")
-        self.server_config_section.pack(fill="x", padx=20, pady=(0, 15))
+        client_radio.pack(anchor="w", padx=25, pady=5)
         
-        # Configuración de IP
-        ip_frame = ctk.CTkFrame(self.server_config_section, fg_color="transparent")
-        ip_frame.pack(fill="x", pady=8)
+        # Configuración de servidor (SIEMPRE visible, pero con contenido condicional)
+        self.server_config_frame = ctk.CTkFrame(self.multiplayer_frame, fg_color="transparent")
+        self.server_config_frame.pack(fill="x", padx=15, pady=(5, 10))
         
-        ip_label = ctk.CTkLabel(
-            ip_frame,
-            text="Server IP Address:",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            width=140
-        )
-        ip_label.pack(side="left")
+        # IP del servidor
+        ip_frame = ctk.CTkFrame(self.server_config_frame, fg_color="transparent")
+        ip_frame.pack(fill="x", padx=15, pady=5)
         
-        self.ip_entry = ctk.CTkEntry(
-            ip_frame,
-            textvariable=self.server_ip,
-            placeholder_text="Enter host IP address (e.g., 192.168.1.100)",
-            font=ctk.CTkFont(size=12),
-            width=220,
-            height=32
-        )
-        self.ip_entry.pack(side="left", padx=(10, 0))
+        ip_label = ctk.CTkLabel(ip_frame, text="IP Servidor:", font=ctk.CTkFont(size=14))
+        ip_label.pack(side="left", padx=(10, 5))
         
-        # Configuración de puerto
-        port_frame = ctk.CTkFrame(self.server_config_section, fg_color="transparent")
-        port_frame.pack(fill="x", pady=8)
+        self.ip_entry = ctk.CTkEntry(ip_frame, textvariable=self.server_ip, width=150)
+        self.ip_entry.pack(side="left", padx=5)
         
-        port_label = ctk.CTkLabel(
-            port_frame,
-            text="Server Port:",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            width=140
-        )
-        port_label.pack(side="left")
+        # Puerto del servidor
+        port_frame = ctk.CTkFrame(self.server_config_frame, fg_color="transparent")
+        port_frame.pack(fill="x", padx=15, pady=(5, 10))
         
-        self.port_entry = ctk.CTkEntry(
-            port_frame,
-            textvariable=self.server_port,
-            placeholder_text="5555",
-            font=ctk.CTkFont(size=12),
-            width=120,
-            height=32
-        )
-        self.port_entry.pack(side="left", padx=(10, 0))
-
-    def _create_network_info(self, parent):
-        """Crear información de red"""
-        info_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        info_frame.pack(fill="x", padx=20, pady=(0, 20))
+        port_label = ctk.CTkLabel(port_frame, text="Puerto:", font=ctk.CTkFont(size=14))
+        port_label.pack(side="left", padx=(10, 5))
+        
+        self.port_entry = ctk.CTkEntry(port_frame, textvariable=self.server_port, width=100)
+        self.port_entry.pack(side="left", padx=5)
         
         # Información de IP local
-        ip_info_frame = ctk.CTkFrame(info_frame, fg_color="transparent")
-        ip_info_frame.pack(fill="x", pady=8)
+        info_frame = ctk.CTkFrame(self.multiplayer_frame, fg_color="transparent")
+        info_frame.pack(fill="x", padx=15, pady=(0, 10))
         
+        try:
+            # Obtener IP local
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            self.ip_info_text = f"Tu IP local: {local_ip} (Dale esta IP a tus amigos)"
+        except:
+            self.ip_info_text = "Tu IP local: No disponible"
+            
         self.ip_info_label = ctk.CTkLabel(
-            ip_info_frame,
-            text=f"📍 Your Local IP: {self.local_ip}",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=self.COLORS['success']
+            info_frame, 
+            text=self.ip_info_text, 
+            font=ctk.CTkFont(size=12),
+            text_color="green"
         )
         self.ip_info_label.pack(anchor="w")
         
-        # Instrucciones
-        instructions_frame = ctk.CTkFrame(info_frame, fg_color="transparent")
-        instructions_frame.pack(fill="x", pady=8)
-        
+        # Instrucciones dinámicas
         self.instructions_label = ctk.CTkLabel(
-            instructions_frame,
-            text="Share your IP with friends to host a game, or enter a host IP to join",
+            info_frame,
+            text="Selecciona 'Crear Servidor' para ser host, o 'Unirse a Servidor' para conectar",
             font=ctk.CTkFont(size=11),
-            text_color="gray70"
+            text_color="blue"
         )
-        self.instructions_label.pack(anchor="w")
+        self.instructions_label.pack(anchor="w", pady=(5, 0))
         
-        # Controles
-        controls_frame = ctk.CTkFrame(info_frame, fg_color="transparent")
-        controls_frame.pack(fill="x", pady=8)
-        
-        controls_text = "🎮 Controls: P1(WASD) • P2(Arrows) • P3(IJKL) • P4(Numpad 8456) • P5(TFGH)"
-        controls_label = ctk.CTkLabel(
-            controls_frame,
-            text=controls_text,
+        # Información sobre controles
+        controls_info = ctk.CTkLabel(
+            info_frame,
+            text="Controles: P1(WASD), P2(Flechas), P3(IJKL), P4(Numpad), P5(TFGH)",
             font=ctk.CTkFont(size=10),
-            text_color="gray60"
+            text_color="gray"
         )
-        controls_label.pack(anchor="w")
-
-    def _create_quick_settings(self):
-        """Crear configuración rápida"""
-        settings_section = ctk.CTkFrame(
-            self.play_section,
-            fg_color="transparent"
-        )
-        settings_section.pack(fill="x", padx=25, pady=15)
+        controls_info.pack(anchor="w", pady=(2, 0))
         
-        # Título de sección
-        section_title = ctk.CTkLabel(
-            settings_section,
-            text="⚡ QUICK SETTINGS",
-            font=ctk.CTkFont(family="Arial", size=18, weight="bold"),
-            text_color=self.COLORS['primary_light']
-        )
-        section_title.pack(anchor="w", pady=(0, 12))
-        
-        # Contenido de configuración
-        settings_content = ctk.CTkFrame(settings_section, fg_color="transparent")
-        settings_content.pack(fill="x", padx=10)
-        
-        # Audio settings
-        audio_frame = ctk.CTkFrame(settings_content, fg_color="transparent")
-        audio_frame.pack(fill="x", pady=8)
-        
-        sound_switch = ctk.CTkSwitch(
-            audio_frame,
-            text="🔊 Sound Effects",
-            variable=self.sound_effects,
-            font=ctk.CTkFont(size=13),
-            progress_color=self.COLORS['primary']
-        )
-        sound_switch.pack(side="left", padx=(0, 20))
-        
-        music_switch = ctk.CTkSwitch(
-            audio_frame,
-            text="🎵 Background Music",
-            variable=self.music,
-            command=self._on_music_toggle,
-            font=ctk.CTkFont(size=13),
-            progress_color=self.COLORS['primary']
-        )
-        music_switch.pack(side="left")
-
-    def _create_action_buttons(self):
-        """Crear botones de acción"""
-        action_section = ctk.CTkFrame(
-            self.play_section,
-            fg_color="transparent"
-        )
-        action_section.pack(fill="x", padx=25, pady=25)
-        
-        # Botones principales
-        buttons_frame = ctk.CTkFrame(action_section, fg_color="transparent")
-        buttons_frame.pack(fill="x", pady=10)
-        
-        # Botón salir
-        exit_button = ctk.CTkButton(
-            buttons_frame,
-            text="🚪 EXIT",
-            command=self._graceful_exit,
-            fg_color=self.COLORS['danger'],
-            hover_color="#C0392B",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            width=120,
-            height=40,
-            corner_radius=10
-        )
-        exit_button.pack(side="left", padx=(0, 15))
-        
-        # Botón música
-        self.music_button = ctk.CTkButton(
-            buttons_frame,
-            text="🔇 MUTE MUSIC",
-            command=self._toggle_music,
-            fg_color=self.COLORS['warning'],
-            hover_color="#E67E22", 
-            font=ctk.CTkFont(size=14, weight="bold"),
-            width=140,
-            height=40,
-            corner_radius=10
-        )
-        self.music_button.pack(side="left", padx=(0, 15))
-        
-        # Botón jugar (principal)
-        play_button = ctk.CTkButton(
-            buttons_frame,
-            text="🎮 START BATTLE",
-            command=self._start_game_flow,
-            fg_color=self.COLORS['success'],
-            hover_color="#229954",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            width=200,
-            height=45,
-            corner_radius=12
-        )
-        play_button.pack(side="right")
-
-    def _create_status_bar(self):
-        """Crear barra de estado inferior"""
-        self.status_bar = ctk.CTkFrame(
-            self.main_container,
-            fg_color=self.COLORS['dark_card'],
-            height=40,
-            corner_radius=0
-        )
-        self.status_bar.pack(fill="x", side="bottom", padx=0, pady=0)
-        self.status_bar.pack_propagate(False)
-        
-        self._create_status_content()
-
-    def _create_status_content(self):
-        """Crear contenido de la barra de estado"""
-        # Estado de conexión
-        connection_frame = ctk.CTkFrame(self.status_bar, fg_color="transparent")
-        connection_frame.pack(side="left", padx=20, pady=10)
-        
-        self.connection_status_label = ctk.CTkLabel(
-            connection_frame,
-            text="🔴 Offline",
-            font=ctk.CTkFont(size=11),
-            text_color="gray70"
-        )
-        self.connection_status_label.pack(side="left")
-        
-        # Información del sistema
-        system_frame = ctk.CTkFrame(self.status_bar, fg_color="transparent")
-        system_frame.pack(side="right", padx=20, pady=10)
-        
-        version_label = ctk.CTkLabel(
-            system_frame,
-            text="Snake Arena Pro v2.1.0",
-            font=ctk.CTkFont(size=11),
-            text_color="gray70"
-        )
-        version_label.pack(side="right")
-
-    def _finalize_setup(self):
-        """Finalizar configuración inicial"""
-        self._update_interface_state()
-        self._load_player_stats()
-        self._start_background_music()
-        self._initialize_network_discovery()
-
-    # =============================================================================
-    # MÉTODOS DE ACTUALIZACIÓN DE INTERFAZ
-    # =============================================================================
-
-    def _on_game_mode_changed(self):
-        """Manejar cambio de modo de juego"""
-        self._update_interface_state()
-        self._update_player_section()
-
-    def _on_multiplayer_mode_changed(self):
+        # Actualizar visibilidad inicial
+        self.on_multiplayer_mode_changed()
+    
+    def on_multiplayer_mode_changed(self):
         """Manejar cambio de modo multijugador"""
         if self.multiplayer_mode.get() == "client":
-            self._enable_client_mode()
+            # Modo Cliente - Mostrar campos y actualizar instrucciones
+            self.ip_entry.configure(state="normal")
+            self.port_entry.configure(state="normal")
+            self.instructions_label.configure(
+                text="Ingresa la IP del host y haz click en Play Game para unirte"
+            )
+            self.ip_info_label.configure(text_color="blue", text=self.ip_info_text)
         else:
-            self._enable_host_mode()
+            # Modo Host - Campos visibles pero IP deshabilitada
+            self.ip_entry.configure(state="disabled")
+            self.port_entry.configure(state="normal")
+            self.instructions_label.configure(
+                text="Comparte tu IP local con amigos y haz click en Play Game (mínimo 2 jugadores)"
+            )
+            self.ip_info_label.configure(text_color="green", text=self.ip_info_text)
+    
+    def on_game_mode_changed(self):
+        """Handle game mode change"""
+        self.update_player_fields()
+        self.update_leaderboard_ui()
 
-    def _enable_client_mode(self):
-        """Habilitar modo cliente"""
-        self.ip_entry.configure(state="normal")
-        self.port_entry.configure(state="normal")
-        self.instructions_label.configure(
-            text="Enter the host IP address and click START BATTLE to join the game"
-        )
-        self.ip_info_label.configure(text_color=self.COLORS['secondary'])
-
-    def _enable_host_mode(self):
-        """Habilitar modo host"""
-        self.ip_entry.configure(state="disabled")
-        self.port_entry.configure(state="normal")
-        self.instructions_label.configure(
-            text="Share your IP address with friends and click START BATTLE to host"
-        )
-        self.ip_info_label.configure(text_color=self.COLORS['success'])
-
-    def _update_interface_state(self):
-        """Actualizar estado completo de la interfaz"""
-        # Ocultar todas las secciones condicionales primero
-        self.multiplayer_section.pack_forget()
+    def create_player_name_section(self):
+        """Sección de nombres simplificada para multijugador"""
+        self.player_frame = ctk.CTkFrame(self.root, corner_radius=10)
+        self.player_frame.pack(fill="x", padx=20, pady=10)
         
-        # Mostrar secciones según el modo
+        name_label = ctk.CTkLabel(
+            self.player_frame,
+            text="Player Names",
+            font=ctk.CTkFont(family="Arial", size=16, weight="bold")
+        )
+        name_label.pack(anchor="w", padx=15, pady=(15, 10))
+        
+        # Player 1 name input
+        self.p1_frame = ctk.CTkFrame(self.player_frame, fg_color="transparent")
+        self.p1_frame.pack(fill="x", padx=15, pady=5)
+        
+        p1_label = ctk.CTkLabel(self.p1_frame, text="Tu nombre:", font=ctk.CTkFont(size=14))
+        p1_label.pack(side="left", padx=(10, 5))
+        
+        p1_entry = ctk.CTkEntry(self.p1_frame, textvariable=self.player1_name, width=200)
+        p1_entry.pack(side="left", padx=5)
+        
+        # Información sobre nombres en multijugador
+        self.name_info_label = ctk.CTkLabel(
+            self.player_frame,
+            text="En multijugador, cada jugador pone su propio nombre",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        )
+        self.name_info_label.pack(anchor="w", padx=15, pady=(5, 15))
+        
+        # Player 2 name input (solo para two_player local)
+        self.p2_frame = ctk.CTkFrame(self.player_frame, fg_color="transparent")
+        
+        p2_label = ctk.CTkLabel(self.p2_frame, text="Player 2:", font=ctk.CTkFont(size=14))
+        p2_label.pack(side="left", padx=(10, 5))
+        
+        p2_entry = ctk.CTkEntry(self.p2_frame, textvariable=self.player2_name, width=200)
+        p2_entry.pack(side="left", padx=5)
+    
+    def create_sound_controls(self):
+        # Sound controls section
+        sound_frame = ctk.CTkFrame(self.root, corner_radius=10)
+        sound_frame.pack(fill="x", padx=20, pady=10)
+        
+        sound_label = ctk.CTkLabel(
+            sound_frame,
+            text="Sound Settings",
+            font=ctk.CTkFont(family="Arial", size=16, weight="bold")
+        )
+        sound_label.pack(anchor="w", padx=15, pady=(15, 10))
+        
+        # Sound effects switch
+        effects_switch = ctk.CTkSwitch(
+            sound_frame,
+            text="Sound Effects",
+            variable=self.sound_effects,
+            font=ctk.CTkFont(size=14)
+        )
+        effects_switch.pack(anchor="w", padx=25, pady=5)
+        
+        # Music switch
+        music_switch = ctk.CTkSwitch(
+            sound_frame,
+            text="Background Music",
+            variable=self.music,
+            command=self.toggle_music_from_switch,
+            font=ctk.CTkFont(size=14)
+        )
+        music_switch.pack(anchor="w", padx=25, pady=(5, 15))
+    
+    def create_leaderboard(self):
+        # Leaderboard section
+        self.lb_frame = ctk.CTkFrame(self.root, corner_radius=10)
+        self.lb_frame.pack(fill="x", padx=20, pady=10)
+        
+        self.lb_label = ctk.CTkLabel(
+            self.lb_frame,
+            text="Leaderboard",
+            font=ctk.CTkFont(family="Arial", size=16, weight="bold")
+        )
+        self.lb_label.pack(anchor="w", padx=15, pady=(15, 10))
+        
+        # Leaderboard will be populated by load_leaderboard_data method
+        self.lb_frame.pack(pady=(10, 15))
+    
+    def create_buttons(self):
+        # Action buttons
+        button_frame = ctk.CTkFrame(self.root, fg_color="transparent")
+        button_frame.pack(fill="x", padx=20, pady=(10, 20))
+        
+        # Exit button
+        exit_button = ctk.CTkButton(
+            button_frame,
+            text="Exit",
+            command=self.exit_program,
+            fg_color="#E74C3C",
+            hover_color="#C0392B",
+            width=100
+        )
+        exit_button.pack(side="left", padx=20)
+
+        # Mute Button
+        self.mute_button = ctk.CTkButton(
+            button_frame,
+            text="Mute Music",
+            command=self.toggle_menu_music,
+            fg_color="#A9A9A9",
+            hover_color="#2c2c2c",
+            width=100
+        )
+        self.mute_button.pack(side="left", padx=20)
+        
+        # Play button
+        play_button = ctk.CTkButton(
+            button_frame,
+            text="Play Game",
+            command=self.start_game,
+            fg_color="#2ECC71",
+            hover_color="#27AE60",
+            font=ctk.CTkFont(weight="bold"),
+            width=150
+        )
+        play_button.pack(side="right", padx=20)
+    
+    def update_player_fields(self):
+        """Mostrar/ocultar campos de jugador según modo de juego"""
         if self.game_mode.get() == "single_player":
-            self._show_single_player_interface()
+            self.p2_frame.pack_forget()
+            self.multiplayer_frame.pack_forget()
+            self.name_info_label.configure(
+                text="Modo un jugador - Controla la serpiente con WASD"
+            )
         elif self.game_mode.get() == "two_player":
-            self._show_two_player_interface()
-        else:
-            self._show_multiplayer_interface()
-
-    def _show_single_player_interface(self):
-        """Mostrar interfaz para un jugador"""
-        self.name_info_label.configure(
-            text="Solo challenge - Test your skills against AI opponents"
-        )
-        self._update_connection_status("Solo mode - No network required")
-
-    def _show_two_player_interface(self):
-        """Mostrar interfaz para dos jugadores"""
-        self.name_info_label.configure(
-            text="Local duel - Player 1 (WASD) vs Player 2 (Arrow keys)"
-        )
-        self._update_connection_status("Local multiplayer - No network required")
-
-    def _show_multiplayer_interface(self):
-        """Mostrar interfaz multijugador"""
-        self.multiplayer_section.pack(fill="x", padx=0, pady=15)
-        self.name_info_label.configure(
-            text="Online battle - Each player uses their own device and name"
-        )
-        self._update_connection_status("Online multiplayer - Network connection required")
-
-    def _update_connection_status(self, status):
-        """Actualizar estado de conexión"""
-        self.connection_status_label.configure(text=f"📡 {status}")
-
-    def _update_player_section(self):
-        """Actualizar sección del jugador"""
-        # Implementar lógica de actualización según estadísticas
-        pass
-
-    # =============================================================================
-    # MÉTODOS DE AUDIO
-    # =============================================================================
-
-    def _start_background_music(self):
-        """Iniciar música de fondo"""
-        if not self.menu_music_path or not self.music.get():
-            return
-            
+            self.p2_frame.pack(fill="x", padx=15, pady=(5, 15))
+            self.multiplayer_frame.pack_forget()
+            self.name_info_label.configure(
+                text="Modo local - P1 (WASD), P2 (Flechas)"
+            )
+        else:  # Multijugador
+            self.p2_frame.pack_forget()
+            self.multiplayer_frame.pack(fill="x", padx=20, pady=10)
+            self.name_info_label.configure(
+                text="En multijugador, cada jugador pone su propio nombre"
+            )
+    
+    def load_leaderboard_data(self):
+        """Load leaderboard data from database"""
+        # Fetch top 5 players (default is single player mode)
+        self.leaderboard_data = self.db_service.fetch_leaderboard()
+        
+        # Update UI with the data
+        self.update_leaderboard_ui()
+    
+    def update_leaderboard_ui(self):
+        """Update leaderboard UI elements with current data"""
+        # Clear existing elements (except the title label)
+        for widget in self.lb_frame.winfo_children():
+            if widget != self.lb_label:  # Keep the title
+                widget.destroy()
+        
+        mode = "multi" if self.game_mode.get() in [MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT] else "single"
+        self.leaderboard_data = self.db_service.fetch_leaderboard(mode)
+        
+        # Recreate header row
+        header_frame = ctk.CTkFrame(self.lb_frame, fg_color="transparent")
+        header_frame.pack(fill="x", padx=15, pady=(0, 5))
+    
+        rank_header = ctk.CTkLabel(header_frame, text="Rank", width=40, font=ctk.CTkFont(weight="bold"))
+        rank_header.pack(side="left", padx=5)
+    
+        name_header = ctk.CTkLabel(header_frame, text="Name", width=120, font=ctk.CTkFont(weight="bold"))
+        name_header.pack(side="left", padx=5)
+    
+        # Add Wins column for multiplayer mode
+        if mode == "multi":
+            wins_header = ctk.CTkLabel(header_frame, text="Wins", width=40, font=ctk.CTkFont(weight="bold"))
+            wins_header.pack(side="left", padx=5)
+    
+        score_header = ctk.CTkLabel(header_frame, text="Score", width=60, font=ctk.CTkFont(weight="bold"))
+        score_header.pack(side="left", padx=5)
+        
+        # Fill with leaderboard data
+        for i, entry in enumerate(self.leaderboard_data, 1):
+            entry_frame = ctk.CTkFrame(self.lb_frame, fg_color="transparent")
+            entry_frame.pack(fill="x", padx=15, pady=2)
+        
+            rank_label = ctk.CTkLabel(entry_frame, text=f"{i}", width=40)
+            rank_label.pack(side="left", padx=5)
+        
+            name_label = ctk.CTkLabel(entry_frame, text=entry[0], width=120, anchor="w")
+            name_label.pack(side="left", padx=5)
+        
+            if mode == "multi":
+                # Format: (name, score, wins)
+                wins_label = ctk.CTkLabel(entry_frame, text=str(entry[2]), width=40)
+                wins_label.pack(side="left", padx=5)
+                score_label = ctk.CTkLabel(entry_frame, text=str(entry[1]), width=60)
+            else:
+                # Format: (name, score)
+                score_label = ctk.CTkLabel(entry_frame, text=str(entry[1]), width=60)
+        
+            score_label.pack(side="left", padx=5)
+    
+    def exit_program(self):
+        try:
+            # Stop music before exiting
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+                pygame.mixer.quit()
+            if pygame.get_init():
+                pygame.quit()
+        except Exception:
+            pass
+        
+        self.exit_reason = "QUIT"
+        self.root.destroy()
+        sys.exit(0)  # Use sys.exit instead of os._exit
+    
+    def start_menu_music(self):
+        """Start playing menu background music"""
         try:
             pygame.mixer.music.load(self.menu_music_path)
-            pygame.mixer.music.play(-1)
-            pygame.mixer.music.set_volume(0.5)
+            pygame.mixer.music.play(-1)  # -1 means loop indefinitely
             self.music_playing = True
-            self.music_button.configure(text="🔇 MUTE MUSIC")
+            self.mute_button.configure(text="Mute Music")
         except Exception as e:
-            print(f"Music error: {e}")
-
-    def _toggle_music(self):
-        """Alternar música"""
+            print(f"Error playing music: {e}")
+    
+    def toggle_menu_music(self):
+        """Toggle menu music on/off"""
         if self.music_playing:
             pygame.mixer.music.pause()
             self.music_playing = False
-            self.music_button.configure(text="🔊 UNMUTE MUSIC")
+            self.mute_button.configure(text="Unmute Music")
         else:
             pygame.mixer.music.unpause()
             self.music_playing = True
-            self.music_button.configure(text="🔇 MUTE MUSIC")
-
-    def _on_music_toggle(self):
-        """Manejar cambio de estado de música"""
-        if self.music.get():
+            self.mute_button.configure(text="Mute Music")
+    
+    def toggle_music_from_switch(self):
+        """Handle music toggle from the switch in sound settings"""
+        if self.music.get():  # If music should be on
             if not self.music_playing:
-                self._start_background_music()
-        else:
+                pygame.mixer.music.unpause()
+                self.music_playing = True
+                self.mute_button.configure(text="Mute Music")
+        else:  # If music should be off
             if self.music_playing:
                 pygame.mixer.music.pause()
                 self.music_playing = False
-
-    # =============================================================================
-    # MÉTODOS DE NAVEGACIÓN (Placeholders)
-    # =============================================================================
-
-    def _show_play_section(self):
-        """Mostrar sección de juego"""
-        print("Navigating to Play section")
-
-    def _show_stats_section(self):
-        """Mostrar sección de estadísticas"""
-        print("Navigating to Stats section")
-
-    def _show_settings_section(self):
-        """Mostrar sección de configuración"""
-        print("Navigating to Settings section")
-
-    def _show_help_section(self):
-        """Mostrar sección de ayuda"""
-        print("Navigating to Help section")
-
-    # =============================================================================
-    # MÉTODOS DE JUEGO PRINCIPALES
-    # =============================================================================
-
-    def _start_game_flow(self):
-        """Iniciar flujo de juego"""
-        if not self._validate_inputs():
-            return
-            
-        if not self._check_player_registration():
-            return
-            
-        self._launch_game_session()
-
-    def _validate_inputs(self):
-        """Validar entradas del usuario"""
-        player_name = self.player1_name.get().strip()
+                self.mute_button.configure(text="Unmute Music")
+    
+    def start_game(self):
+        # Get player names
+        p1_name = self.player1_name.get()
+        p2_name = self.player2_name.get()
         
-        if not player_name:
-            self._show_error_dialog("Player name cannot be empty", "Please enter your player name")
-            return False
+        # Check if names are provided
+        if not p1_name:
+            self.show_error("Please enter a name for Player 1")
+            return
             
-        if " " in player_name:
-            self._show_error_dialog("Invalid player name", "Player name cannot contain spaces")
-            return False
-            
-        # Validación multijugador
+        # Validación según modo de juego
+        if self.game_mode.get() == "two_player" and not p2_name:
+            self.show_error("Please enter a name for Player 2")
+            return
+    
+        # Validación para multijugador
         if self.game_mode.get() in [MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT]:
+            # En multijugador, solo necesitamos el nombre del jugador actual
+            if not p1_name:
+                self.show_error("Please enter your name")
+                return
+            
+            # Validar configuración de red para cliente
             if self.multiplayer_mode.get() == "client":
                 if not self.server_ip.get().strip():
-                    self._show_error_dialog("Server IP required", "Please enter the host server IP address")
-                    return False
-                    
+                    self.show_error("Please enter server IP address")
+                    return
                 try:
                     port = int(self.server_port.get())
-                    if not (1 <= port <= 65535):
+                    if port < 1 or port > 65535:
                         raise ValueError
                 except ValueError:
-                    self._show_error_dialog("Invalid port", "Please enter a valid port number (1-65535)")
-                    return False
-                    
-        return True
-
-    def _check_player_registration(self):
-        """Verificar registro del jugador"""
-        player_name = self.player1_name.get().strip()
-        existing_users = self.db_service.check_username(player_name)
+                    self.show_error("Please enter a valid port number (1-65535)")
+                    return
+    
+        # Validation checks
+        if not p1_name or " " in p1_name:
+            self.show_error("Player name cannot be empty or contain spaces.")
+            return
+            
+        if self.game_mode.get() == "two_player":
+            if not p2_name or " " in p2_name:
+                self.show_error("Player 2 name cannot be empty or contain spaces.")
+                return
+    
+        # Check if username exists
+        existing_users = []
+        if self.game_mode.get() == "single_player":
+            existing_users = self.db_service.check_username(p1_name)
+        elif self.game_mode.get() == "two_player":
+            existing_users = self.db_service.check_username(p1_name, p2_name)
+        else:  # Multijugador - solo verificar el nombre del jugador actual
+            existing_users = self.db_service.check_username(p1_name)
         
         if existing_users:
-            return self._show_returning_player_dialog(existing_users[0])
+            # Show confirmation dialog for returning players
+            self.confirm_returning_players(existing_users)
         else:
-            self.db_service.register_new_player(player_name)
-            return True
-
-    def _show_returning_player_dialog(self, username):
-        """Mostrar diálogo para jugador existente"""
-        dialog = ctk.CTkToplevel(self.root)
-        dialog.title("Welcome Back!")
-        dialog.geometry("500x250")
-        dialog.resizable(False, False)
-        dialog.transient(self.root)
-        dialog.grab_set()
+            # Register new players
+            if self.game_mode.get() == "single_player":
+                self.db_service.register_new_player(p1_name)
+            elif self.game_mode.get() == "two_player":
+                self.db_service.register_new_player(p1_name)
+                self.db_service.register_new_player(p2_name)
+            else:  # Multijugador - solo registrar el nombre del jugador actual
+                self.db_service.register_new_player(p1_name)
+            self.launch_game()
+    
+    def confirm_returning_players(self, existing_users):
+        """Show dialog to confirm if the user is the same person as a returning player"""
+        # Create confirmation dialog
+        confirm_window = ctk.CTkToplevel(self.root)
+        confirm_window.title("Returning Player")
+        confirm_window.geometry("400x200")
+        confirm_window.resizable(False, False)
         
-        # Contenido del diálogo
-        content_frame = ctk.CTkFrame(dialog, fg_color="transparent")
-        content_frame.pack(fill="both", expand=True, padx=30, pady=30)
+        if self.game_mode.get() in [MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT]:
+            message = f"Player {existing_users[0]} already exists.\n\nIf you are returning, click Continue. Otherwise, change your name."
+        else:
+            message = f"Player{'s' if len(existing_users) > 1 else ''} {', '.join(existing_users)} already exist{'s' if len(existing_users) == 1 else ''}.\n\nIf you are returning, click Continue. Otherwise, change your name."
         
-        welcome_label = ctk.CTkLabel(
-            content_frame,
-            text=f"Welcome back, {username}!",
-            font=ctk.CTkFont(family="Arial", size=16, weight="bold")
+        confirm_label = ctk.CTkLabel(
+            confirm_window,
+            text=message,
+            font=ctk.CTkFont(size=14),
+            wraplength=350
         )
-        welcome_label.pack(pady=(0, 20))
-
-        button_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
-        button_frame.pack(fill="x", pady=20)
-
+        confirm_label.pack(pady=(30, 20))
+        
+        button_frame = ctk.CTkFrame(confirm_window, fg_color="transparent")
+        button_frame.pack(pady=10)
+        
         cancel_button = ctk.CTkButton(
             button_frame,
             text="Cancel",
-            command=dialog.destroy,
+            command=confirm_window.destroy,
             fg_color="#E74C3C",
-            hover_color="#C0392B"
+            hover_color="#C0392B",
+            width=100
         )
         cancel_button.pack(side="left", padx=10)
-
+        
         continue_button = ctk.CTkButton(
             button_frame,
             text="Continue",
-            command=lambda: [dialog.destroy(), self.launch_game()],
+            command=lambda: [confirm_window.destroy(), self.launch_game()],
             fg_color="#2ECC71",
-            hover_color="#27AE60"
+            hover_color="#27AE60",
+            width=100
         )
-        continue_button.pack(side="right", padx=10)
-
-        self.root.wait_window(dialog)
-        return True
-
+        continue_button.pack(side="left", padx=10)
+        
+        # Make the window modal
+        confirm_window.transient(self.root)
+        confirm_window.grab_set()
+        self.root.wait_window(confirm_window)
+    
+    def launch_game(self):
+        """Launch the game process"""
+        # Get game parameters
+        mode = self.game_mode.get()
+        p1_name = self.player1_name.get()
+        p2_name = self.player2_name.get()
+        sound = "on" if self.sound_effects.get() else "off"
+        music = "on" if self.music.get() else "off"
+        
+        # Determinar modo multijugador específico
+        if mode in [MODE_MULTIPLAYER_HOST, MODE_MULTIPLAYER_CLIENT]:
+            is_host = (self.multiplayer_mode.get() == "host")
+            actual_mode = MODE_MULTIPLAYER_HOST if is_host else MODE_MULTIPLAYER_CLIENT
+            host_ip = "localhost" if is_host else self.server_ip.get()
+            port = int(self.server_port.get())
+            
+            # En multijugador, usar p1_name como nombre del jugador actual
+            # y p2_name como placeholder (no se usa realmente)
+            player1_name = p1_name
+            player2_name = "Player_2"  # Placeholder
+        else:
+            actual_mode = mode
+            is_host = True
+            host_ip = "localhost"
+            port = 5555
+            player1_name = p1_name
+            player2_name = p2_name if mode == "two_player" else ""
+        
+        # Stop music before closing
+        try:
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+                pygame.mixer.quit()
+            if pygame.get_init():
+                pygame.quit()
+        except Exception:
+            pass
+        
+        # Close the menu
+        self.root.destroy()
+        
+        # Start a new process for the game
+        main_py_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'main.py')
+        python_executable = sys.executable
+        
+        # Construir comando
+        command = [
+            python_executable, 
+            main_py_path, 
+            actual_mode, 
+            player1_name, 
+            player2_name, 
+            sound, 
+            music,
+            "--host", host_ip,
+            "--port", str(port),
+            "--is-host", "1" if is_host else "0"
+        ]
+        
+        print(f"🚀 Iniciando juego: {actual_mode}")
+        print(f"🎮 Jugador: {player1_name}")
+        print(f"🔗 Configuración red: {host_ip}:{port} ({'Host' if is_host else 'Client'})")
+        
+        # Launch the game in a new process
+        subprocess.Popen(command)
+        
+        # Exit this process completely
+        sys.exit(0)
+    
+    def show_error(self, message):
+        error_window = ctk.CTkToplevel(self.root)
+        error_window.title("Error")
+        error_window.geometry("350x150")
+        error_window.resizable(False, False)
+        
+        error_label = ctk.CTkLabel(
+            error_window,
+            text=message,
+            font=ctk.CTkFont(size=14)
+        )
+        error_label.pack(pady=(30, 20))
+        
+        ok_button = ctk.CTkButton(
+            error_window,
+            text="OK",
+            command=error_window.destroy,
+            width=100
+        )
+        ok_button.pack(pady=10)
+        
+        # Make the error window modal
+        error_window.transient(self.root)
+        error_window.grab_set()
+        self.root.wait_window(error_window)
 
 def run_menu():
     app = MainMenu()
     app.root.mainloop()
     return "QUIT"
-
 
 if __name__ == "__main__":
     run_menu()
